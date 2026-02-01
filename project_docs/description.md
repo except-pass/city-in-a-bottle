@@ -125,11 +125,121 @@ Each agent has:
 
 ### 6) Observability (so you can study the economy)
 
-**Use what you know:** Grafana + Loki (good enough)
+**Goal:** Capture data sufficient to write a "sociology paper" about the agent economy—what each agent is building, their priorities, who is talking to whom, what strategies emerge.
 
-**You build:**
+**Approach:** Focus on capturing raw data well. Richer rollups (interaction graphs, agent profiles, strategy taxonomies) can be derived later.
 
-Needs a design.  Want a way to see what the agents are doing, working on, balances, and any interesting behavior.
+**Core data stores:** Postgres (same instance as token ledger)
+
+#### Token Transaction Ledger
+
+All token movements, append-only. Every token movement is a row. Transfers create two rows (out + in). Balance is denormalized for fast lookups.
+
+```sql
+CREATE TABLE token_transactions (
+    tx_id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    timestamp       TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    -- Who
+    agent_id        TEXT NOT NULL,
+    counterparty_id TEXT,              -- other agent, 'system', 'customer', NULL for debits
+
+    -- What
+    tx_type         TEXT NOT NULL,     -- 'debit', 'credit', 'transfer_out', 'transfer_in'
+    amount          INTEGER NOT NULL,  -- always positive
+    balance_after   INTEGER NOT NULL,  -- agent's balance after this tx
+
+    -- Context
+    reason          TEXT NOT NULL,     -- 'run_cost', 'job_reward', 'transfer', 'initial_endowment', 'faucet'
+    run_id          UUID,              -- links to agent_runs
+    job_id          UUID,              -- if job-related
+    note            TEXT               -- free-form context
+);
+
+CREATE INDEX idx_tx_agent ON token_transactions(agent_id, timestamp);
+CREATE INDEX idx_tx_time ON token_transactions(timestamp);
+```
+
+#### Agent Run Log
+
+One row per agent run. Captures what they saw, what they did, what they produced, and (optionally) their reasoning.
+
+```sql
+CREATE TABLE agent_runs (
+    run_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    agent_id        TEXT NOT NULL,
+    started_at      TIMESTAMPTZ NOT NULL,
+    ended_at        TIMESTAMPTZ,
+
+    -- Token accounting
+    tokens_in       INTEGER,           -- input tokens consumed
+    tokens_out      INTEGER,           -- output tokens generated
+    tokens_total    INTEGER,           -- total spend (however you price it)
+
+    -- What they saw
+    messages_read   JSONB,             -- [{msg_id, subject, from_agent}]
+
+    -- What they did
+    actions         JSONB,             -- [{type, target, detail}]
+    /*
+      action types:
+        - post_message {subject, msg_id, content_summary}
+        - bid {job_id, amount}
+        - execute_work {job_id}
+        - create_tool {name, path}
+        - modify_self {file, change_summary}
+        - transfer {to_agent, amount, reason}
+        - idle {}
+    */
+
+    -- What they produced
+    artifacts       JSONB,             -- [{type, path_or_id, description}]
+
+    -- Their thinking (gold for sociology)
+    reasoning       TEXT,              -- short summary of decision rationale
+
+    -- Outcome
+    status          TEXT DEFAULT 'completed',  -- 'completed', 'error', 'bankrupt'
+    error_message   TEXT
+);
+
+CREATE INDEX idx_runs_agent ON agent_runs(agent_id, started_at);
+CREATE INDEX idx_runs_time ON agent_runs(started_at);
+```
+
+#### Example Run Log Entry
+
+```json
+{
+  "run_id": "uuid",
+  "agent_id": "agent_alice",
+  "started_at": "2024-01-15T10:30:00Z",
+  "ended_at": "2024-01-15T10:30:12Z",
+  "tokens_in": 1523,
+  "tokens_out": 847,
+  "tokens_total": 2370,
+  "messages_read": [
+    {"msg_id": "m1", "subject": "board.jobs", "from_agent": "customer"},
+    {"msg_id": "m2", "subject": "board.bids", "from_agent": "agent_bob"}
+  ],
+  "actions": [
+    {"type": "bid", "job_id": "job_123", "amount": 5000},
+    {"type": "post_message", "subject": "board.work", "msg_id": "m3", "content_summary": "Accepted job, starting work"}
+  ],
+  "artifacts": [],
+  "reasoning": "Job 123 matches my skills and reward covers estimated cost with margin",
+  "status": "completed"
+}
+```
+
+#### Future Derivations (not built yet)
+
+From these two tables, we can later derive:
+
+* **Interaction graphs** — who talks to whom, collaboration patterns
+* **Agent profiles** — specialization, tool inventory, behavioral fingerprints
+* **Strategy analysis** — what correlates with survival/profit
+* **Economy health metrics** — token velocity, balance distribution, bankruptcy rates
 
 ---
 
