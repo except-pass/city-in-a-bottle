@@ -8,6 +8,7 @@ Uses Claude CLI authentication (supports Max subscription).
 import asyncio
 import json
 import os
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -307,11 +308,13 @@ class AgentRunner:
 **Your turn.** You have {ctx.balance_before} tokens. Make it count."""
 
             # Configure MCP servers for native tool access
+            # Use sys.executable to work in both venv and Docker environments
             project_root = self.agents_base_dir.parent
+            python_cmd = sys.executable
             mcp_servers = {
                 "board": {
                     "type": "stdio",
-                    "command": str(project_root / ".venv" / "bin" / "python"),
+                    "command": python_cmd,
                     "args": [str(project_root / "src" / "mcp_servers" / "board_server.py")],
                     "env": {
                         "NATS_URL": self.nats_url,
@@ -325,7 +328,7 @@ class AgentRunner:
                 },
                 "ledger": {
                     "type": "stdio",
-                    "command": str(project_root / ".venv" / "bin" / "python"),
+                    "command": python_cmd,
                     "args": [str(project_root / "src" / "mcp_servers" / "ledger_server.py")],
                     "env": {
                         "POSTGRES_HOST": self.postgres_config["host"],
