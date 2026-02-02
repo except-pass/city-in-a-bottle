@@ -100,12 +100,19 @@ class AgentRunner:
                 return AgentConfig(**data)
         return AgentConfig()
 
-    def _load_instructions(self, agent_id: str) -> str:
-        """Load agent instructions (system prompt)."""
-        instructions_path = self.agents_base_dir / agent_id / "agent.md"
-        if instructions_path.exists():
-            return instructions_path.read_text()
-        return "You are an agent in the agent economy. Complete jobs to earn tokens."
+    def _load_system_rules(self) -> str:
+        """Load the universal system rules (same for all agents)."""
+        system_prompt_path = Path(__file__).parent / "system_prompt.md"
+        if system_prompt_path.exists():
+            return system_prompt_path.read_text()
+        return "You are an agent in the agent economy."
+
+    def _load_personality(self, agent_id: str) -> str:
+        """Load agent's personality from agent.md (mutable by agent)."""
+        personality_path = self.agents_base_dir / agent_id / "agent.md"
+        if personality_path.exists():
+            return personality_path.read_text()
+        return f"You are {agent_id}."
 
     def _load_core_memory(self, agent_id: str) -> str:
         """Load agent's core memory."""
@@ -117,22 +124,35 @@ class AgentRunner:
     def _build_system_prompt(
         self,
         agent_id: str,
-        instructions: str,
+        system_rules: str,
+        personality: str,
         config: AgentConfig,
         balance: int,
         core_memory: str,
     ) -> str:
-        """Build the system prompt for the agent."""
+        """Build the system prompt for the agent.
+
+        Structure:
+        1. System rules (universal, immutable)
+        2. Agent personality (from agent.md, mutable by agent)
+        3. Current state (balance, warnings)
+        4. Core memory (from memory/core.md)
+        """
         prompt_parts = [
-            instructions,
+            system_rules,
             "",
             "---",
             "",
-            "## Current State",
+            "# Your Personality",
+            "",
+            personality,
+            "",
+            "---",
+            "",
+            "# Current Session",
             "",
             f"**Agent ID:** {agent_id}",
             f"**Current Balance:** {balance} tokens",
-            f"**Model:** {config.model}",
             "",
         ]
 
@@ -234,9 +254,13 @@ class AgentRunner:
 
             # Load config and state
             config = self._load_config(agent_id)
-            instructions = self._load_instructions(agent_id)
+            system_rules = self._load_system_rules()
+            personality = self._load_personality(agent_id)
             ctx.core_memory = self._load_core_memory(agent_id)
             ctx.balance_before = await ledger.get_balance(agent_id)
+
+            # Agent's own directory is the working directory
+            agent_dir = self.agents_base_dir / agent_id
 
             # Check debt limit
             if config.debt_limit is not None and ctx.balance_before < -config.debt_limit:
@@ -248,7 +272,8 @@ class AgentRunner:
             # Build system prompt
             system_prompt = self._build_system_prompt(
                 agent_id,
-                instructions,
+                system_rules,
+                personality,
                 config,
                 ctx.balance_before,
                 ctx.core_memory,
@@ -274,29 +299,12 @@ class AgentRunner:
 
             board_context = "".join(board_context_parts)
 
-            # Build the user prompt
+            # Build the user prompt - just the board context and a simple instruction
             user_prompt = f"""{board_context}
 
-It's your turn. Check the board, decide what to do, and take action. Be efficient with tokens.
+---
 
-You have access to MCP tools for the board and ledger:
-
-**Board tools (mcp__board__*):**
-- list_jobs(status, limit): List jobs by status (open/in_progress/accepted/cancelled/all) - USE THIS FIRST
-- read_board(subject, limit): Read raw messages (subjects: job, bid, status, result, meta)
-- post_bid(job_msg_id, message, proposed_reward): Bid on a job
-- submit_work(job_msg_id, result, artifacts): Submit completed work
-- get_thread(thread_id): Get all messages in a thread
-
-**Ledger tools (mcp__ledger__*):**
-- get_balance(): Get your current token balance
-- get_all_balances(): See all agent balances
-- transfer_tokens(to_agent, amount, reason): Pay another agent
-- get_transactions(limit): View your recent transactions
-
-You also have standard file tools (Read, Write) for your agent directory.
-
-When you're done, summarize what you did and update your memory/core.md file."""
+**Your turn.** You have {ctx.balance_before} tokens. Make it count."""
 
             # Configure MCP servers for native tool access
             project_root = self.agents_base_dir.parent
@@ -331,12 +339,14 @@ When you're done, summarize what you did and update your memory/core.md file."""
             }
 
             # Configure Claude Code SDK options
+            # Agent's cwd is their own directory - they can modify anything there
+            # but cannot access other agents' directories or repo source
             options = ClaudeCodeOptions(
                 system_prompt=system_prompt,
                 model=config.model,
                 max_turns=config.max_turns,
-                cwd=str(sandbox.agent_dir),
-                permission_mode="bypassPermissions",  # Agent can use all tools
+                cwd=str(agent_dir),  # Agent's own directory
+                permission_mode="bypassPermissions",
                 mcp_servers=mcp_servers,
             )
 

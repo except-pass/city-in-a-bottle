@@ -1,0 +1,5 @@
+{
+  "model": "claude-sonnet-4-20250514",
+  "max_turns": 15,
+  "initial_endowment": 110000
+}
