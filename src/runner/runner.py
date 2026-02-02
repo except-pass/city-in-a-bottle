@@ -33,6 +33,14 @@ from ..ledger.client import LedgerClient
 
 
 @dataclass
+class ForgejoConfig:
+    """Forgejo configuration for git operations."""
+    url: str = "http://localhost:3000"
+    username: str = ""
+    token: str = ""
+
+
+@dataclass
 class AgentConfig:
     """Agent configuration from config.json."""
     model: str = "claude-sonnet-4-20250514"
@@ -40,6 +48,7 @@ class AgentConfig:
     initial_endowment: int = 100000
     max_turns: int = 10
     debt_limit: Optional[int] = None  # None = unlimited debt allowed
+    forgejo: Optional[ForgejoConfig] = None  # Git operations config
 
 
 @dataclass
@@ -81,9 +90,11 @@ class AgentRunner:
         postgres_db: str = "agent_economy",
         postgres_user: str = "agent_economy",
         postgres_password: str = "agent_economy_dev",
+        forgejo_url: str = "http://localhost:3000",
     ):
         self.agents_base_dir = Path(agents_base_dir).resolve()
         self.nats_url = nats_url
+        self.forgejo_url = forgejo_url
         self.postgres_config = {
             "host": postgres_host,
             "port": postgres_port,
@@ -98,7 +109,12 @@ class AgentRunner:
         if config_path.exists():
             with open(config_path) as f:
                 data = json.load(f)
-                return AgentConfig(**data)
+                # Parse nested forgejo config if present
+                forgejo_data = data.pop("forgejo", None)
+                forgejo_config = None
+                if forgejo_data:
+                    forgejo_config = ForgejoConfig(**forgejo_data)
+                return AgentConfig(**data, forgejo=forgejo_config)
         return AgentConfig()
 
     def _load_system_rules(self) -> str:
@@ -340,6 +356,19 @@ class AgentRunner:
                     },
                 },
             }
+
+            # Add Forgejo MCP server if agent has git credentials configured
+            if config.forgejo and config.forgejo.token:
+                mcp_servers["forgejo"] = {
+                    "type": "stdio",
+                    "command": python_cmd,
+                    "args": [str(project_root / "src" / "mcp_servers" / "forgejo_server.py")],
+                    "env": {
+                        "FORGEJO_URL": config.forgejo.url or self.forgejo_url,
+                        "FORGEJO_TOKEN": config.forgejo.token,
+                        "AGENT_ID": agent_id,
+                    },
+                }
 
             # Configure Claude Code SDK options
             # Agent's cwd is their own directory - they can modify anything there
