@@ -31,6 +31,13 @@ from .tools import AgentTools, get_tool_definitions, get_agent_tools
 from ..board.client import BoardClient, MessageType
 from ..ledger.client import LedgerClient
 
+# Optional Zulip support
+try:
+    import zulip
+    ZULIP_AVAILABLE = True
+except ImportError:
+    ZULIP_AVAILABLE = False
+
 
 @dataclass
 class ForgejoConfig:
@@ -85,6 +92,8 @@ class AgentRunner:
         self,
         agents_base_dir: str = "agents",
         nats_url: str = "nats://localhost:4222",
+        zulip_url: str = "http://localhost:8080",
+        message_bus: str = "nats",  # "nats" or "zulip"
         postgres_host: str = "localhost",
         postgres_port: int = 5432,
         postgres_db: str = "agent_economy",
@@ -94,6 +103,8 @@ class AgentRunner:
     ):
         self.agents_base_dir = Path(agents_base_dir).resolve()
         self.nats_url = nats_url
+        self.zulip_url = zulip_url
+        self.message_bus = message_bus
         self.forgejo_url = forgejo_url
         self.postgres_config = {
             "host": postgres_host,
@@ -102,6 +113,9 @@ class AgentRunner:
             "user": postgres_user,
             "password": postgres_password,
         }
+
+        if message_bus == "zulip" and not ZULIP_AVAILABLE:
+            raise RuntimeError("Zulip message bus selected but 'zulip' package not installed")
 
     def _load_config(self, agent_id: str) -> AgentConfig:
         """Load agent configuration."""
@@ -204,6 +218,63 @@ class AgentRunner:
 
         return "\n".join(prompt_parts)
 
+    async def _read_zulip_context(self, agent_id: str) -> tuple[str, list[dict]]:
+        """Read board context from Zulip channels.
+
+        Returns:
+            Tuple of (context_markdown, messages_read_list)
+        """
+        agent_dir = self.agents_base_dir / agent_id
+        zuliprc_path = agent_dir / ".zuliprc"
+
+        if not zuliprc_path.exists():
+            return "No Zulip context available (bot not configured).", []
+
+        client = zulip.Client(config_file=str(zuliprc_path))
+        messages_read = []
+        context_parts = ["## Current Board Messages\n"]
+
+        # Channels to read
+        channels = [
+            ("job-board", "Jobs and Bids"),
+            ("results", "Work Results"),
+            ("system", "System Announcements"),
+        ]
+
+        for channel_name, channel_label in channels:
+            try:
+                result = client.get_messages({
+                    "narrow": [{"operator": "stream", "operand": channel_name}],
+                    "num_before": 20,
+                    "num_after": 0,
+                    "anchor": "newest",
+                })
+
+                if result.get("result") == "success":
+                    msgs = result.get("messages", [])
+                    if msgs:
+                        context_parts.append(f"### {channel_label.upper()} (#{channel_name})\n")
+                        for msg in msgs[-10:]:  # Last 10
+                            sender = msg["sender_email"].split("@")[0]
+                            topic = msg.get("subject", "")
+                            content_preview = msg["content"][:200]
+
+                            messages_read.append({
+                                "msg_id": str(msg["id"]),
+                                "channel": channel_name,
+                                "topic": topic,
+                                "from_agent": sender,
+                            })
+
+                            context_parts.append(
+                                f"- **[{sender}]** ({topic}): {content_preview}\n"
+                            )
+                        context_parts.append("\n")
+            except Exception as e:
+                context_parts.append(f"### {channel_label} (error: {e})\n\n")
+
+        return "".join(context_parts), messages_read
+
     async def _record_run(
         self,
         ctx: RunContext,
@@ -261,12 +332,15 @@ class AgentRunner:
         )
 
         # Initialize clients
-        board = BoardClient(self.nats_url)
+        board = None
+        if self.message_bus == "nats":
+            board = BoardClient(self.nats_url)
         ledger = LedgerClient(**self.postgres_config)
         sandbox = Sandbox(agent_id, str(self.agents_base_dir))
 
         try:
-            await board.connect()
+            if board:
+                await board.connect()
             await ledger.connect()
 
             # Load config and state
@@ -297,24 +371,28 @@ class AgentRunner:
             )
 
             # Read board messages for context
-            all_messages = await board.read_all_messages(limit_per_type=20)
-            board_context_parts = ["## Current Board Messages\n"]
+            if self.message_bus == "zulip":
+                board_context, ctx.messages_read = await self._read_zulip_context(agent_id)
+            else:
+                # NATS message reading
+                all_messages = await board.read_all_messages(limit_per_type=20)
+                board_context_parts = ["## Current Board Messages\n"]
 
-            for msg_type, messages in all_messages.items():
-                if messages:
-                    board_context_parts.append(f"### {msg_type.value.upper()}\n")
-                    for msg in messages[-10:]:  # Last 10 of each type
-                        ctx.messages_read.append({
-                            "msg_id": msg.msg_id,
-                            "subject": f"board.{msg_type.value}",
-                            "from_agent": msg.agent_id,
-                        })
-                        board_context_parts.append(
-                            f"- [{msg.agent_id}] {json.dumps(msg.content)[:200]}\n"
-                        )
-                    board_context_parts.append("\n")
+                for msg_type, messages in all_messages.items():
+                    if messages:
+                        board_context_parts.append(f"### {msg_type.value.upper()}\n")
+                        for msg in messages[-10:]:  # Last 10 of each type
+                            ctx.messages_read.append({
+                                "msg_id": msg.msg_id,
+                                "subject": f"board.{msg_type.value}",
+                                "from_agent": msg.agent_id,
+                            })
+                            board_context_parts.append(
+                                f"- [{msg.agent_id}] {json.dumps(msg.content)[:200]}\n"
+                            )
+                        board_context_parts.append("\n")
 
-            board_context = "".join(board_context_parts)
+                board_context = "".join(board_context_parts)
 
             # Build the user prompt - just the board context and a simple instruction
             user_prompt = f"""{board_context}
@@ -327,8 +405,26 @@ class AgentRunner:
             # Use sys.executable to work in both venv and Docker environments
             project_root = self.agents_base_dir.parent
             python_cmd = sys.executable
-            mcp_servers = {
-                "board": {
+
+            # Choose message board MCP server based on configuration
+            if self.message_bus == "zulip":
+                board_mcp_config = {
+                    "type": "stdio",
+                    "command": python_cmd,
+                    "args": [str(project_root / "src" / "mcp_servers" / "zulip_server.py")],
+                    "env": {
+                        "AGENT_DIR": str(agent_dir),
+                        "AGENT_ID": agent_id,
+                        "ZULIP_SITE": self.zulip_url,
+                        "POSTGRES_HOST": self.postgres_config["host"],
+                        "POSTGRES_PORT": str(self.postgres_config["port"]),
+                        "POSTGRES_DB": self.postgres_config["database"],
+                        "POSTGRES_USER": self.postgres_config["user"],
+                        "POSTGRES_PASSWORD": self.postgres_config["password"],
+                    },
+                }
+            else:
+                board_mcp_config = {
                     "type": "stdio",
                     "command": python_cmd,
                     "args": [str(project_root / "src" / "mcp_servers" / "board_server.py")],
@@ -341,7 +437,10 @@ class AgentRunner:
                         "POSTGRES_USER": self.postgres_config["user"],
                         "POSTGRES_PASSWORD": self.postgres_config["password"],
                     },
-                },
+                }
+
+            mcp_servers = {
+                "board": board_mcp_config,
                 "ledger": {
                     "type": "stdio",
                     "command": python_cmd,
@@ -448,7 +547,8 @@ class AgentRunner:
             raise
 
         finally:
-            await board.close()
+            if board:
+                await board.close()
             await ledger.close()
 
 
@@ -461,6 +561,9 @@ if __name__ == "__main__":
         parser.add_argument("agent_id", help="Agent ID to run")
         parser.add_argument("--agents-dir", default="agents", help="Agents base directory")
         parser.add_argument("--nats-url", default="nats://localhost:4222", help="NATS URL")
+        parser.add_argument("--zulip-url", default="http://localhost:8080", help="Zulip URL")
+        parser.add_argument("--message-bus", default="nats", choices=["nats", "zulip"],
+                          help="Message bus to use (nats or zulip)")
         parser.add_argument("--postgres-host", default="localhost", help="Postgres host")
 
         args = parser.parse_args()
@@ -468,6 +571,8 @@ if __name__ == "__main__":
         runner = AgentRunner(
             agents_base_dir=args.agents_dir,
             nats_url=args.nats_url,
+            zulip_url=args.zulip_url,
+            message_bus=args.message_bus,
             postgres_host=args.postgres_host,
         )
 

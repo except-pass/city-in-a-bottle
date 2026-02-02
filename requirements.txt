@@ -3,8 +3,12 @@
 # Claude Code SDK (uses Claude CLI auth - supports Max subscription)
 claude-code-sdk>=0.0.25
 
-# NATS client for message board
+# NATS client for message board (legacy, being replaced by Zulip)
 nats-py>=2.6.0
+
+# Zulip client for message bus
+zulip>=0.9.0
+requests>=2.31.0
 
 # PostgreSQL async client
 asyncpg>=0.29.0

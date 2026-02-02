@@ -19,6 +19,97 @@ services:
       timeout: 5s
       retries: 5
 
+  # Zulip stack - message bus with UI, persistence, and user management
+  zulip:
+    image: zulip/docker-zulip:latest
+    container_name: agent_economy_zulip
+    environment:
+      # Database connection - using DB_* vars for bootstrap phase
+      DB_HOST: postgresql-zulip
+      DB_HOST_PORT: "5432"
+      DB_USER: zulip
+      # Redis
+      SETTING_REDIS_HOST: redis-zulip
+      # RabbitMQ
+      SETTING_RABBITMQ_HOST: rabbitmq-zulip
+      SETTING_RABBITMQ_PASSWORD: zulip_rabbitmq_dev
+      # Memcached - single line
+      SETTING_CACHES: '{"default": {"BACKEND": "django_bmemcached.memcached.BMemcached", "LOCATION": "memcached-zulip:11211"}}'
+      # Server settings
+      SETTING_EXTERNAL_HOST: localhost:8080
+      SETTING_ZULIP_ADMINISTRATOR: admin@agent-economy.local
+      # Disable email - not needed for agent communication
+      SETTING_EMAIL_BACKEND: django.core.mail.backends.console.EmailBackend
+      SETTING_NOREPLY_EMAIL_ADDRESS: noreply@agent-economy.local
+      SETTING_ADD_TOKENS_TO_NOREPLY_ADDRESS: "False"
+      # Security - dev settings
+      SECRETS_secret_key: "dev-secret-key-change-in-production-1234567890"
+      SECRETS_rabbitmq_password: zulip_rabbitmq_dev
+      SECRETS_postgres_password: zulip_dev
+      # Disable push notifications
+      SETTING_PUSH_NOTIFICATION_BOUNCER_URL: ""
+      # SSL - auto-generate self-signed certs for dev
+      SSL_CERTIFICATE_GENERATION: self-signed
+      # Organization settings
+      SETTING_DEFAULT_REALM_NAME: "Agent Economy"
+      SETTING_ZULIP_ORG_NAME: "Agent Economy"
+    ports:
+      - "8080:80"     # Web UI and API
+      - "8443:443"    # HTTPS (self-signed)
+    volumes:
+      - zulip_data:/data
+    depends_on:
+      postgresql-zulip:
+        condition: service_healthy
+      redis-zulip:
+        condition: service_started
+      rabbitmq-zulip:
+        condition: service_started
+      memcached-zulip:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+
+  postgresql-zulip:
+    image: postgres:16
+    container_name: agent_economy_postgresql_zulip
+    environment:
+      POSTGRES_USER: zulip
+      POSTGRES_PASSWORD: zulip_dev
+      POSTGRES_DB: zulip
+    volumes:
+      - postgresql_zulip_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zulip"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis-zulip:
+    image: redis:7-alpine
+    container_name: agent_economy_redis_zulip
+    volumes:
+      - redis_zulip_data:/data
+
+  rabbitmq-zulip:
+    image: rabbitmq:3-management
+    container_name: agent_economy_rabbitmq_zulip
+    environment:
+      RABBITMQ_DEFAULT_USER: zulip
+      RABBITMQ_DEFAULT_PASS: zulip_rabbitmq_dev
+    volumes:
+      - rabbitmq_zulip_data:/var/lib/rabbitmq
+
+  memcached-zulip:
+    image: memcached:1.6-alpine
+    container_name: agent_economy_memcached_zulip
+    command: ["-m", "256"]
+
+  # NATS - legacy, will be removed after Zulip migration
   nats:
     image: nats:2.10
     container_name: agent_economy_nats
@@ -63,6 +154,7 @@ services:
 
   # Agent runner - runs agents in isolated containers
   # Usage: docker compose run --rm agent agent_alpha
+  # For Zulip: docker compose run --rm -e MESSAGE_BUS=zulip agent agent_alpha
   agent:
     build:
       context: ../
@@ -73,7 +165,10 @@ services:
       # Mount agents directory for persistent memory
       - ../agents:/app/agents
     environment:
+      # Message bus configuration (nats or zulip)
+      - MESSAGE_BUS=${MESSAGE_BUS:-nats}
       - NATS_URL=nats://nats:4222
+      - ZULIP_URL=http://zulip:80
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_DB=agent_economy
@@ -92,3 +187,7 @@ volumes:
   postgres_data:
   nats_data:
   forgejo_data:
+  zulip_data:
+  postgresql_zulip_data:
+  redis_zulip_data:
+  rabbitmq_zulip_data:

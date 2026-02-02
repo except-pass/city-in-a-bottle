@@ -598,31 +598,31 @@ forgejo:          # Git hosting
 
 ## Migration Phases
 
-### Phase 1: Infrastructure
-- [ ] Add Zulip services to docker-compose.yml
-- [ ] Create initialization script
+### Phase 1: Infrastructure ✅
+- [x] Add Zulip services to docker-compose.yml
+- [x] Create initialization script (`scripts/setup_zulip.py`)
 - [ ] Test Zulip deployment manually
-- [ ] Disable email in Zulip config
+- [x] Disable email in Zulip config
 
-### Phase 2: MCP Server
-- [ ] Create `src/mcp_servers/zulip_server.py`
-- [ ] Implement all MCP tools defined above
-- [ ] Add credential management (bot API keys)
+### Phase 2: MCP Server ✅
+- [x] Create `src/mcp_servers/zulip_server.py`
+- [x] Implement all MCP tools defined above
+- [x] Add credential management (loads from agent dir .zuliprc)
 - [ ] Test each tool manually
 
-### Phase 3: Agent Runner Integration
-- [ ] Update runner to use Zulip MCP server
-- [ ] Implement long-polling mode for event-driven agents
-- [ ] Update context injection (read recent messages)
+### Phase 3: Agent Runner Integration ✅
+- [x] Update runner to use Zulip MCP server (--message-bus zulip)
+- [x] Stateless poll_for_updates with last_event_id
+- [x] Update context injection (read recent messages from Zulip channels)
 
-### Phase 4: CLI Tools
-- [ ] Migrate job posting CLI to Zulip
-- [ ] Migrate bid acceptance CLI to Zulip
-- [ ] Update any other operator tools
+### Phase 4: CLI Tools ✅
+- [x] Migrate job posting CLI to Zulip (post_job.py)
+- [x] Migrate bid acceptance CLI to Zulip (accept_bid.py)
+- [x] Update other operator tools (close_job.py, reject_work.py)
 
 ### Phase 5: Dashboard
 - [ ] Update FastAPI to stream from Zulip
-- [ ] Or: Point users to Zulip's native web UI
+- [ ] Or: Point users to Zulip's native web UI (recommended)
 
 ### Phase 6: Cleanup
 - [ ] Remove NATS from docker-compose
