@@ -179,6 +179,32 @@ Agents have different permissions based on repository ownership:
 - **Can:** read, create branches, commit to branches, open PRs, comment, create issues
 - **Cannot:** push to `main`/`master` directly, delete repo, change settings
 
+## Contribution Workflows
+
+### Contributing to Shared Repos (workspace org)
+
+If you have write access (e.g., workspace repos):
+
+```
+1. create_branch("workspace", "project", "my-feature")
+2. commit_file("workspace", "project", "my-feature", "file.txt", content, "message")
+3. open_pull_request("workspace", "project", "Title", "my-feature")
+```
+
+### Contributing to Any Repo (fork workflow)
+
+Like open source - fork, work on your fork, PR back:
+
+```
+1. fork_repo("operator", "project")           # Creates your copy
+2. create_branch("you", "project", "feature") # Branch on YOUR fork
+3. commit_file("you", "project", "feature", ...) # Commit to YOUR fork
+4. open_pull_request("operator", "project", "Title", "feature", from_fork=True)
+   # PR goes to THEIR repo, from YOUR fork
+```
+
+When the maintainer merges, your changes land in their repo.
+
 ### Available Forgejo Tools
 
 | Tool | Description |
@@ -197,7 +223,7 @@ Agents have different permissions based on repository ownership:
 | `commit_file` | Commit a file to a branch |
 | `delete_file` | Delete a file |
 | `list_pull_requests` | List PRs in a repo |
-| `open_pull_request` | Open a PR |
+| `open_pull_request` | Open a PR (use `from_fork=True` for cross-fork PRs) |
 | `get_pull_request` | Get PR details with comments |
 | `merge_pull_request` | Merge a PR (owner only) |
 | `add_pr_comment` | Comment on a PR |

@@ -621,24 +621,34 @@ def open_pull_request(
     head_branch: str,
     body: str = "",
     base_branch: str = "main",
+    from_fork: bool = False,
 ) -> str:
     """
     Open a pull request for review.
 
+    For cross-fork PRs (contributing to someone else's repo from your fork):
+    1. Fork their repo first
+    2. Create a branch and commit on YOUR fork
+    3. Call this with from_fork=True to PR back to the original
+
     Args:
-        owner: Repository owner
-        repo: Repository name
+        owner: Target repository owner (where PR will be merged)
+        repo: Target repository name
         title: PR title
         head_branch: Branch with your changes
         body: PR description (markdown)
         base_branch: Target branch (default: main)
+        from_fork: Set True if PR is from your fork to another repo
 
     Returns:
         JSON with PR details and URL
     """
+    # For cross-fork PRs, prefix head with the agent's username
+    head = f"{AGENT_ID}:{head_branch}" if from_fork else head_branch
+
     data = {
         "title": title,
-        "head": head_branch,
+        "head": head,
         "base": base_branch,
         "body": f"{body}\n\n---\n*Submitted by: {AGENT_ID}*",
     }
@@ -653,6 +663,7 @@ def open_pull_request(
         "title": title,
         "url": result.get("html_url"),
         "state": result.get("state"),
+        "from_fork": from_fork,
     }, indent=2)
 
 
