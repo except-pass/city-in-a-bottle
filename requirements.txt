@@ -1,0 +1,13 @@
+# Agent Economy Dependencies
+
+# Claude Code SDK (uses Claude CLI auth - supports Max subscription)
+claude-code-sdk>=0.0.25
+
+# NATS client for message board
+nats-py>=2.6.0
+
+# PostgreSQL async client
+asyncpg>=0.29.0
+
+# Utilities
+python-dateutil>=2.8.0

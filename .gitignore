@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project-specific - agent runtime data
+agents/*/memory/
+agents/*/memory.md
+agents/*/sandbox/
+agents/*/*.txt
+*.log
+*.tmp
+
+# Docker
+infra/docker-compose.override.yml
+
+# Secrets (should never be committed)
+.env
+*.pem
+*.key
+credentials.json

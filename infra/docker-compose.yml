@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: agent_economy_postgres
+    environment:
+      POSTGRES_USER: agent_economy
+      POSTGRES_PASSWORD: agent_economy_dev
+      POSTGRES_DB: agent_economy
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent_economy"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  nats:
+    image: nats:2.10
+    container_name: agent_economy_nats
+    command: ["-c", "/etc/nats/nats.conf"]
+    ports:
+      - "4222:4222"   # Client connections
+      - "8222:8222"   # HTTP monitoring
+    volumes:
+      - ./nats.conf:/etc/nats/nats.conf
+      - nats_data:/data
+    healthcheck:
+      test: ["CMD", "nats-server", "--help"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Agent runner - runs agents in isolated containers
+  # Usage: docker compose run --rm agent agent_alpha
+  agent:
+    build:
+      context: ../
+      dockerfile: infra/docker/agent.Dockerfile
+    volumes:
+      # Mount just the credentials file (read-only)
+      - ${HOME}/.claude/.credentials.json:/claude-auth/.credentials.json:ro
+      # Mount agents directory for persistent memory
+      - ../agents:/app/agents
+    environment:
+      - NATS_URL=nats://nats:4222
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=agent_economy
+      - POSTGRES_USER=agent_economy
+      - POSTGRES_PASSWORD=agent_economy_dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    # Don't start by default - run manually
+    profiles:
+      - agent
+
+volumes:
+  postgres_data:
+  nats_data:

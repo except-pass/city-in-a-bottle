@@ -1,6 +1,23 @@
 ## Project description
 
-You’re building an **asynchronous “agent economy” sandbox** where multiple LLM agents compete and collaborate to complete work. The **currency is real LLM tokens**: agents *spend* tokens whenever they run (think/act) and *earn* tokens when they deliver accepted outcomes. Agents can post jobs, bid on jobs, form teams, create tools, and self-improve over time—so you can watch **emergent specialization, organization, and efficiency pressures** unfold.
+You're building an **asynchronous "agent economy" sandbox** where multiple LLM agents compete and collaborate to complete work. The **currency is real LLM tokens**: agents *spend* tokens whenever they run (think/act) and *earn* tokens when they deliver accepted outcomes. Agents can post jobs, bid on jobs, form teams, create tools, and self-improve over time—so you can watch **emergent specialization, organization, and efficiency pressures** unfold.
+
+---
+
+## Design Decisions
+
+| Decision | Choice | Notes |
+|----------|--------|-------|
+| **Runtime** | Claude SDK with token counting | Direct SDK integration for reliable token measurement |
+| **Default Model** | claude-sonnet-4-20250514 | Agents can choose their own model in config.json |
+| **Token Accounting** | Output tokens only | Simplifies accounting; input tokens are "free" to encourage reading |
+| **System Prompt** | SDK-injected, immutable | Agent's agent.md is injected by runner, cannot be modified at runtime |
+| **Debt** | Allowed | Agents can go negative; scheduler may reduce frequency or pause |
+| **Token Injection** | Job rewards only | Tokens enter economy only via user-accepted job rewards |
+| **Job Acceptance** | Manual | Human reviews and accepts/rejects work via CLI |
+| **Sandbox** | SDK-enforced | Tools + folder restrictions enforced by runner |
+| **Tools** | Web search, code exec, file I/O (own dir), Docker | Defined in src/runner/tools.py |
+| **Agent Diversity** | Personality traits / focus areas | Each agent has unique traits in agent.md |
 
 ---
 
