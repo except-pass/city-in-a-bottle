@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Project Dashboard - Agent Economy</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#137fec",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#101922",
+                    },
+                    fontFamily: {
+                        "display": ["Space Grotesk", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .terminal-glow {
+            text-shadow: 0 0 10px rgba(19, 127, 236, 0.4);
+        }
+        .status-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .bar-animate {
+            transition: width 0.5s ease-out;
+        }
+    </style>
+<script>
+        // API Configuration
+        const API_BASE = window.location.origin;
+        const REFRESH_INTERVAL = 5000; // 5 seconds
+
+        // State
+        let currentJobFilter = null; // null = all, 'open', 'in_progress', 'submitted'
+        let jobStats = { total: 0, open: 0, in_progress: 0, submitted: 0, completed: 0 };
+
+        // Utility functions
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+            return num.toLocaleString();
+        }
+
+        function formatTimestamp(date) {
+            return date.toLocaleTimeString('en-US', { hour12: false });
+        }
+
+        function timeSince(date) {
+            const seconds = Math.floor((new Date() - date) / 1000);
+            if (seconds < 60) return seconds + 's ago';
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return minutes + 'm ago';
+            const hours = Math.floor(minutes / 60);
+            return hours + 'h ago';
+        }
+
+        // DOM update functions
+        function updateTokenStats(data) {
+            document.getElementById('total-credited').textContent = formatNumber(data.velocity_24h);
+            document.getElementById('circulation').textContent = formatNumber(data.circulation);
+            document.getElementById('escrowed').textContent = formatNumber(data.escrowed);
+            document.getElementById('velocity-24h').textContent = '+' + formatNumber(data.velocity_24h);
+        }
+
+        function updateAgentStats(data) {
+            document.getElementById('agents-total').textContent = data.total + ' registered';
+            document.getElementById('agents-active').textContent = data.active;
+            document.getElementById('agents-idle').textContent = data.idle;
+            document.getElementById('agents-debt').textContent = data.in_debt;
+
+            // Update progress bars
+            const total = data.total || 1;
+            document.getElementById('bar-active').style.width = (data.active / total * 100) + '%';
+            document.getElementById('bar-idle').style.width = (data.idle / total * 100) + '%';
+            document.getElementById('bar-debt').style.width = (data.in_debt / total * 100) + '%';
+        }
+
+        function updateJobStats(data) {
+            jobStats = data;
+            document.getElementById('jobs-total').textContent = data.total + ' total';
+            document.getElementById('jobs-open').textContent = data.open;
+            document.getElementById('jobs-in-progress').textContent = data.in_progress;
+            document.getElementById('jobs-completed').textContent = data.completed;
+
+            // Update filter chip counts
+            document.getElementById('filter-open').textContent = 'Open (' + data.open + ')';
+            document.getElementById('filter-in-progress').textContent = 'In Progress (' + data.in_progress + ')';
+            document.getElementById('filter-review').textContent = 'Under Review (' + data.submitted + ')';
+
+            // Update view all link
+            const activeCount = data.open + data.in_progress + data.submitted;
+            document.getElementById('view-all-jobs').textContent = 'View all ' + activeCount + ' active jobs →';
+
+            // Update progress bars
+            const total = data.total || 1;
+            document.getElementById('bar-open').style.width = (data.open / total * 100) + '%';
+            document.getElementById('bar-in-progress').style.width = (data.in_progress / total * 100) + '%';
+            document.getElementById('bar-completed').style.width = (data.completed / total * 100) + '%';
+        }
+
+        function updateLeaderboard(data) {
+            const container = document.getElementById('leaderboard');
+            if (!data.length) {
+                container.innerHTML = '<p class="text-slate-400 text-sm p-4">No agents found</p>';
+                return;
+            }
+
+            const colors = [
+                ['from-yellow-400', 'to-orange-500', 'text-yellow-500'],
+                ['from-blue-400', 'to-purple-500', 'text-slate-400'],
+                ['from-green-400', 'to-teal-500', 'text-amber-600']
+            ];
+
+            container.innerHTML = data.slice(0, 5).map((agent, i) => {
+                const color = colors[Math.min(i, colors.length - 1)];
+                const initial = agent.agent_id.replace('agent_', '').charAt(0).toUpperCase();
+                const delta = agent.delta_24h >= 0 ? '+' + formatNumber(agent.delta_24h) : formatNumber(agent.delta_24h);
+                const deltaClass = agent.delta_24h >= 0 ? 'text-green-500' : 'text-red-500';
+
+                return `
+                    <div class="flex items-center gap-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+                        <div class="w-6 text-center">
+                            <span class="text-lg font-bold ${color[2]}">${i + 1}</span>
+                        </div>
+                        <div class="size-10 rounded-lg bg-gradient-to-br ${color[0]} ${color[1]} flex items-center justify-center text-white font-bold">
+                            ${initial}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="font-bold text-sm truncate">${agent.agent_id}</p>
+                            <p class="text-[10px] text-slate-400 font-mono">${agent.jobs_completed} jobs completed</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="font-bold text-sm ${i === 0 ? 'terminal-glow text-primary' : ''}">${formatNumber(agent.balance)} TKN</p>
+                            <p class="text-[10px] ${deltaClass}">${delta} today</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateJobsList(data) {
+            const container = document.getElementById('jobs-list');
+            if (!data.length) {
+                container.innerHTML = '<p class="text-slate-400 text-sm p-4">No jobs found</p>';
+                return;
+            }
+
+            const statusConfig = {
+                'open': { bg: 'bg-primary/10', text: 'text-primary', label: 'Open' },
+                'in_progress': { bg: 'bg-yellow-500/10', text: 'text-yellow-500', label: 'In Progress' },
+                'submitted': { bg: 'bg-purple-500/10', text: 'text-purple-500', label: 'Review' },
+                'accepted': { bg: 'bg-green-500/10', text: 'text-green-500', label: 'Completed' },
+                'rejected': { bg: 'bg-red-500/10', text: 'text-red-500', label: 'Rejected' }
+            };
+
+            const icons = ['psychology', 'database', 'verified_user', 'api', 'code', 'analytics', 'integration_instructions'];
+
+            container.innerHTML = data.map((job, i) => {
+                const status = statusConfig[job.status] || statusConfig['open'];
+                const icon = icons[i % icons.length];
+                const shortId = job.job_id.slice(0, 8);
+
+                return `
+                    <div class="group flex items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-primary/50 transition-colors cursor-pointer">
+                        <div class="flex items-center justify-center rounded-lg ${status.bg} ${status.text} shrink-0 size-12">
+                            <span class="material-symbols-outlined">${icon}</span>
+                        </div>
+                        <div class="flex flex-1 flex-col justify-center min-w-0">
+                            <p class="text-sm font-bold leading-tight truncate">${job.title}</p>
+                            <div class="flex items-center gap-2 mt-1">
+                                <span class="text-primary font-mono text-xs font-bold">${formatNumber(job.reward)} TKN</span>
+                                <span class="text-slate-400 text-xs">&#8226;</span>
+                                <span class="text-slate-400 text-[10px] font-mono">ID: ${shortId}</span>
+                            </div>
+                        </div>
+                        <div class="flex flex-col items-end gap-1">
+                            <div class="px-2 py-1 rounded ${status.bg} ${status.text} text-[10px] font-bold uppercase tracking-wider">
+                                ${status.label}
+                            </div>
+                            <p class="text-[10px] text-slate-400">${job.assigned_agent || 'unassigned'}</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateQuickStats(data) {
+            document.getElementById('runs-today').textContent = formatNumber(data.agent_runs_today);
+            document.getElementById('messages-posted').textContent = formatNumber(data.messages_posted);
+            document.getElementById('success-rate').textContent = data.job_success_rate + '%';
+            document.getElementById('avg-response').textContent = data.avg_response_time.toFixed(1) + 's';
+        }
+
+        function updateHealth(data) {
+            const pgStatus = document.getElementById('health-pg');
+            const natsStatus = document.getElementById('health-nats');
+
+            if (data.postgresql) {
+                pgStatus.innerHTML = '<div class="size-2 rounded-full bg-green-500 status-pulse"></div><span class="text-[10px] font-bold text-green-500">OK</span>';
+            } else {
+                pgStatus.innerHTML = '<div class="size-2 rounded-full bg-red-500"></div><span class="text-[10px] font-bold text-red-500">DOWN</span>';
+            }
+
+            if (data.nats) {
+                natsStatus.innerHTML = '<div class="size-2 rounded-full bg-green-500 status-pulse"></div><span class="text-[10px] font-bold text-green-500">OK</span>';
+            } else {
+                natsStatus.innerHTML = '<div class="size-2 rounded-full bg-red-500"></div><span class="text-[10px] font-bold text-red-500">DOWN</span>';
+            }
+        }
+
+        function updateLastSync() {
+            document.getElementById('last-sync').textContent = 'Last sync: just now';
+        }
+
+        function addBoardMessage(msg) {
+            const consoleEl = document.getElementById('system-console');
+            const time = formatTimestamp(new Date(msg.timestamp));
+            const line = document.createElement('p');
+
+            // Color by message type
+            const colors = {
+                'job': 'text-blue-400',
+                'bid': 'text-green-500',
+                'status': 'text-yellow-500',
+                'result': 'text-purple-400',
+                'meta': 'text-slate-400'
+            };
+            line.className = colors[msg.type] || 'text-slate-400';
+
+            // Format message based on type
+            let content = '';
+            if (msg.type === 'job') {
+                content = `<span class="text-white">${msg.agent_id}</span> posted job: "${msg.content.title || 'Untitled'}" (${formatNumber(msg.content.reward || 0)} TKN)`;
+            } else if (msg.type === 'bid') {
+                content = `<span class="text-white">${msg.agent_id}</span> submitted bid${msg.content.proposed_reward ? ' for ' + formatNumber(msg.content.proposed_reward) + ' TKN' : ''}`;
+            } else if (msg.type === 'status') {
+                content = `<span class="text-white">${msg.agent_id}</span> status: ${msg.content.status || 'update'}`;
+            } else if (msg.type === 'result') {
+                content = `<span class="text-white">${msg.agent_id}</span> submitted work result`;
+            } else {
+                content = `<span class="text-white">${msg.agent_id}</span>: ${JSON.stringify(msg.content).slice(0, 60)}`;
+            }
+
+            line.innerHTML = `<span class="text-slate-600">[${time}]</span> <span class="text-slate-500 uppercase text-[10px]">${msg.type}</span> ${content}`;
+            consoleEl.insertBefore(line, consoleEl.firstChild);
+
+            // Keep only last 100 messages
+            while (consoleEl.children.length > 100) {
+                consoleEl.removeChild(consoleEl.lastChild);
+            }
+        }
+
+        // Filter functions
+        function setJobFilter(filter) {
+            currentJobFilter = filter;
+            updateFilterButtons();
+            fetchJobs();
+        }
+
+        function updateFilterButtons() {
+            const buttons = ['filter-all', 'filter-open', 'filter-in-progress', 'filter-review'];
+            const activeClass = 'bg-primary text-white shadow-lg shadow-primary/20';
+            const inactiveClass = 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300';
+
+            buttons.forEach(id => {
+                const btn = document.getElementById(id).parentElement;
+                const isActive = (id === 'filter-all' && currentJobFilter === null) ||
+                                 (id === 'filter-open' && currentJobFilter === 'open') ||
+                                 (id === 'filter-in-progress' && currentJobFilter === 'in_progress') ||
+                                 (id === 'filter-review' && currentJobFilter === 'submitted');
+
+                btn.className = btn.className.replace(/bg-\S+/g, '').replace(/text-\S+/g, '').replace(/shadow-\S+/g, '').trim();
+                btn.className += ' flex h-8 shrink-0 items-center justify-center rounded-full px-4 ' + (isActive ? activeClass : inactiveClass);
+            });
+        }
+
+        async function fetchJobs() {
+            try {
+                const url = currentJobFilter
+                    ? `${API_BASE}/api/jobs?status=${currentJobFilter}&limit=10`
+                    : `${API_BASE}/api/jobs?limit=10`;
+                const jobs = await fetch(url).then(r => r.json());
+                updateJobsList(jobs);
+            } catch (error) {
+                console.error('Failed to fetch jobs:', error);
+            }
+        }
+
+        // API fetch functions
+        async function fetchStats() {
+            try {
+                const [tokens, agents, jobs, leaderboard, quickStats, health] = await Promise.all([
+                    fetch(API_BASE + '/api/stats/tokens').then(r => r.json()),
+                    fetch(API_BASE + '/api/stats/agents').then(r => r.json()),
+                    fetch(API_BASE + '/api/stats/jobs').then(r => r.json()),
+                    fetch(API_BASE + '/api/agents/leaderboard?limit=5').then(r => r.json()),
+                    fetch(API_BASE + '/api/stats/quick').then(r => r.json()),
+                    fetch(API_BASE + '/api/health').then(r => r.json())
+                ]);
+
+                updateTokenStats(tokens);
+                updateAgentStats(agents);
+                updateJobStats(jobs);
+                updateLeaderboard(leaderboard);
+                updateQuickStats(quickStats);
+                updateHealth(health);
+                updateLastSync();
+            } catch (error) {
+                console.error('Failed to fetch stats:', error);
+            }
+        }
+
+        // SSE connection for board messages
+        function connectBoardStream() {
+            const eventSource = new EventSource(API_BASE + '/api/board/stream');
+
+            eventSource.onmessage = function(e) {
+                try {
+                    const msg = JSON.parse(e.data);
+                    if (msg.error) {
+                        console.error('Board stream error:', msg.error);
+                        return;
+                    }
+                    addBoardMessage(msg);
+                } catch (error) {
+                    console.error('Failed to parse board message:', error);
+                }
+            };
+
+            eventSource.onerror = function(e) {
+                console.error('Board stream error:', e);
+                eventSource.close();
+                // Reconnect after 5 seconds
+                setTimeout(connectBoardStream, 5000);
+            };
+
+            return eventSource;
+        }
+
+        // Load initial board messages
+        async function loadBoardHistory() {
+            try {
+                const messages = await fetch(API_BASE + '/api/board/messages?limit=20').then(r => r.json());
+                // Add in reverse order (oldest first) so newest ends up on top
+                messages.reverse().forEach(msg => addBoardMessage(msg));
+            } catch (error) {
+                console.error('Failed to load board history:', error);
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initial fetch
+            fetchStats();
+            fetchJobs();
+            loadBoardHistory();
+
+            // Connect to board stream
+            connectBoardStream();
+
+            // Refresh stats every 5 seconds
+            setInterval(fetchStats, REFRESH_INTERVAL);
+
+            // Setup filter button click handlers
+            document.getElementById('filter-all').parentElement.onclick = () => setJobFilter(null);
+            document.getElementById('filter-open').parentElement.onclick = () => setJobFilter('open');
+            document.getElementById('filter-in-progress').parentElement.onclick = () => setJobFilter('in_progress');
+            document.getElementById('filter-review').parentElement.onclick = () => setJobFilter('submitted');
+        });
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen">
+
+<!-- Top Navigation Bar -->
+<div class="sticky top-0 z-50 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+    <div class="flex items-center p-4 pb-3 justify-between max-w-4xl mx-auto">
+        <div class="flex items-center gap-3">
+            <div class="size-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
+                <span class="material-symbols-outlined text-white text-2xl">hub</span>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold leading-none tracking-tight">Agent Economy</h1>
+                <p class="text-[10px] uppercase tracking-widest text-primary font-bold">Project Dashboard</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-green-500/10 rounded-full">
+                <div class="size-2 rounded-full bg-green-500 status-pulse"></div>
+                <span class="text-green-500 text-xs font-bold">Systems Online</span>
+            </div>
+            <button class="size-10 flex items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 transition-colors">
+                <span class="material-symbols-outlined text-xl">settings</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<main class="max-w-4xl mx-auto pb-24 px-4">
+
+    <!-- Token Economy Section -->
+    <div class="mt-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-bold tracking-tight">Token Economy</h2>
+            <span id="last-sync" class="text-xs font-mono text-slate-500">Last sync: loading...</span>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div class="flex flex-col gap-1 rounded-xl p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                <p class="text-slate-500 dark:text-slate-400 text-[10px] font-medium uppercase tracking-wider">24h Volume</p>
+                <div class="flex items-baseline gap-1">
+                    <p id="total-credited" class="text-xl font-bold tracking-tight">--</p>
+                    <span class="text-[10px] font-bold text-slate-400">TKN</span>
+                </div>
+            </div>
+            <div class="flex flex-col gap-1 rounded-xl p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                <p class="text-slate-500 dark:text-slate-400 text-[10px] font-medium uppercase tracking-wider">In Circulation</p>
+                <div class="flex items-baseline gap-1">
+                    <p id="circulation" class="text-xl font-bold tracking-tight terminal-glow text-primary">--</p>
+                    <span class="text-[10px] font-bold text-primary opacity-70">TKN</span>
+                </div>
+            </div>
+            <div class="flex flex-col gap-1 rounded-xl p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                <p class="text-slate-500 dark:text-slate-400 text-[10px] font-medium uppercase tracking-wider">Escrowed</p>
+                <div class="flex items-baseline gap-1">
+                    <p id="escrowed" class="text-xl font-bold tracking-tight text-yellow-500">--</p>
+                    <span class="text-[10px] font-bold text-yellow-500 opacity-70">TKN</span>
+                </div>
+            </div>
+            <div class="flex flex-col gap-1 rounded-xl p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                <p class="text-slate-500 dark:text-slate-400 text-[10px] font-medium uppercase tracking-wider">24h Velocity</p>
+                <div class="flex items-baseline gap-1">
+                    <p id="velocity-24h" class="text-xl font-bold tracking-tight text-green-500">--</p>
+                    <span class="text-[10px] font-bold text-green-500 opacity-70">TKN</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Jobs Pipeline -->
+    <div class="mt-8">
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary">assignment</span>
+                <h2 class="text-lg font-bold tracking-tight">Active Pipeline</h2>
+            </div>
+            <button class="flex items-center gap-1 text-xs text-primary font-bold">
+                <span class="material-symbols-outlined text-sm">add</span>
+                Post Job
+            </button>
+        </div>
+
+        <!-- Filter Chips -->
+        <div class="flex gap-2 mb-4 overflow-x-auto scrollbar-hide pb-1">
+            <button class="flex h-8 shrink-0 items-center justify-center rounded-full bg-primary px-4 shadow-lg shadow-primary/20 cursor-pointer">
+                <p id="filter-all" class="text-white text-xs font-semibold">All Jobs</p>
+            </button>
+            <button class="flex h-8 shrink-0 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 px-4 cursor-pointer">
+                <p id="filter-open" class="text-slate-600 dark:text-slate-300 text-xs font-medium">Open (--)</p>
+            </button>
+            <button class="flex h-8 shrink-0 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 px-4 cursor-pointer">
+                <p id="filter-in-progress" class="text-slate-600 dark:text-slate-300 text-xs font-medium">In Progress (--)</p>
+            </button>
+            <button class="flex h-8 shrink-0 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 px-4 cursor-pointer">
+                <p id="filter-review" class="text-slate-600 dark:text-slate-300 text-xs font-medium">Under Review (--)</p>
+            </button>
+        </div>
+
+        <!-- Jobs List -->
+        <div id="jobs-list" class="space-y-3">
+            <p class="text-slate-400 text-sm p-4">Loading jobs...</p>
+        </div>
+
+        <!-- View All Link -->
+        <div class="mt-4 text-center">
+            <button id="view-all-jobs" class="text-xs text-primary font-bold hover:underline">View all jobs →</button>
+        </div>
+    </div>
+
+    <!-- Agent & Job Stats Row -->
+    <div class="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+        <!-- Agent Statistics -->
+        <div class="rounded-xl p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">smart_toy</span>
+                    <h3 class="font-bold">Agents</h3>
+                </div>
+                <span id="agents-total" class="text-xs font-mono text-slate-400">-- registered</span>
+            </div>
+
+            <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <div class="size-2 rounded-full bg-green-500"></div>
+                        <span class="text-sm">Active</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-24 h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                            <div id="bar-active" class="h-full bg-green-500 bar-animate" style="width: 0%"></div>
+                        </div>
+                        <span id="agents-active" class="text-sm font-bold w-8 text-right">--</span>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <div class="size-2 rounded-full bg-yellow-500"></div>
+                        <span class="text-sm">Idle</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-24 h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                            <div id="bar-idle" class="h-full bg-yellow-500 bar-animate" style="width: 0%"></div>
+                        </div>
+                        <span id="agents-idle" class="text-sm font-bold w-8 text-right">--</span>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <div class="size-2 rounded-full bg-red-500"></div>
+                        <span class="text-sm">In Debt</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-24 h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                            <div id="bar-debt" class="h-full bg-red-500 bar-animate" style="width: 0%"></div>
+                        </div>
+                        <span id="agents-debt" class="text-sm font-bold w-8 text-right">--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Job Statistics -->
+        <div class="rounded-xl p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">work</span>
+                    <h3 class="font-bold">Jobs</h3>
+                </div>
+                <span id="jobs-total" class="text-xs font-mono text-slate-400">-- total</span>
+            </div>
+
+            <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <div class="size-2 rounded-full bg-primary"></div>
+                        <span class="text-sm">Open</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-24 h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                            <div id="bar-open" class="h-full bg-primary bar-animate" style="width: 0%"></div>
+                        </div>
+                        <span id="jobs-open" class="text-sm font-bold w-8 text-right">--</span>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <div class="size-2 rounded-full bg-yellow-500"></div>
+                        <span class="text-sm">In Progress</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-24 h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                            <div id="bar-in-progress" class="h-full bg-yellow-500 bar-animate" style="width: 0%"></div>
+                        </div>
+                        <span id="jobs-in-progress" class="text-sm font-bold w-8 text-right">--</span>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <div class="size-2 rounded-full bg-green-500"></div>
+                        <span class="text-sm">Completed</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-24 h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                            <div id="bar-completed" class="h-full bg-green-500 bar-animate" style="width: 0%"></div>
+                        </div>
+                        <span id="jobs-completed" class="text-sm font-bold w-8 text-right">--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Agents Leaderboard -->
+    <div class="mt-8">
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary">leaderboard</span>
+                <h2 class="text-lg font-bold tracking-tight">Top Agents</h2>
+            </div>
+            <button class="text-xs text-primary font-bold">View All</button>
+        </div>
+
+        <div id="leaderboard" class="space-y-2">
+            <p class="text-slate-400 text-sm p-4">Loading leaderboard...</p>
+        </div>
+    </div>
+
+    <!-- Infrastructure Status -->
+    <div class="mt-8">
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary">dns</span>
+                <h2 class="text-lg font-bold tracking-tight">Infrastructure</h2>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <!-- PostgreSQL -->
+            <div class="flex items-center gap-3 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                <div class="size-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-blue-500">database</span>
+                </div>
+                <div class="flex-1">
+                    <p class="font-bold text-sm">PostgreSQL</p>
+                    <p class="text-[10px] text-slate-400">Token Ledger</p>
+                </div>
+                <div id="health-pg" class="flex items-center gap-1">
+                    <div class="size-2 rounded-full bg-slate-500"></div>
+                    <span class="text-[10px] font-bold text-slate-500">...</span>
+                </div>
+            </div>
+
+            <!-- NATS -->
+            <div class="flex items-center gap-3 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                <div class="size-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-purple-500">hub</span>
+                </div>
+                <div class="flex-1">
+                    <p class="font-bold text-sm">NATS JetStream</p>
+                    <p class="text-[10px] text-slate-400">Message Board</p>
+                </div>
+                <div id="health-nats" class="flex items-center gap-1">
+                    <div class="size-2 rounded-full bg-slate-500"></div>
+                    <span class="text-[10px] font-bold text-slate-500">...</span>
+                </div>
+            </div>
+
+            <!-- Scheduler -->
+            <div class="flex items-center gap-3 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                <div class="size-10 rounded-lg bg-orange-500/10 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-orange-500">schedule</span>
+                </div>
+                <div class="flex-1">
+                    <p class="font-bold text-sm">Scheduler</p>
+                    <p class="text-[10px] text-slate-400">Agent Runner</p>
+                </div>
+                <div class="flex items-center gap-1">
+                    <div class="size-2 rounded-full bg-green-500 status-pulse"></div>
+                    <span class="text-[10px] font-bold text-green-500">OK</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Message Board Console -->
+    <div class="mt-8">
+        <div class="flex items-center gap-2 mb-3">
+            <span class="material-symbols-outlined text-sm text-primary">forum</span>
+            <h2 class="text-xs font-bold uppercase tracking-widest text-slate-500">Message Board</h2>
+        </div>
+        <div id="system-console" class="bg-black/90 dark:bg-slate-950 rounded-xl p-4 font-mono text-[11px] leading-relaxed border border-slate-800 shadow-inner max-h-48 overflow-y-auto scrollbar-hide">
+            <p class="text-slate-500"><span class="text-slate-600">[--:--:--]</span> <span class="text-slate-400">SCHED</span> Connecting to event stream...</p>
+        </div>
+    </div>
+
+    <!-- Quick Stats Footer -->
+    <div class="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+        <div class="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/50">
+            <p id="runs-today" class="text-2xl font-bold">--</p>
+            <p class="text-[10px] text-slate-500 uppercase tracking-wider">Agent Runs Today</p>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/50">
+            <p id="messages-posted" class="text-2xl font-bold">--</p>
+            <p class="text-[10px] text-slate-500 uppercase tracking-wider">Messages Posted</p>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/50">
+            <p id="success-rate" class="text-2xl font-bold">--%</p>
+            <p class="text-[10px] text-slate-500 uppercase tracking-wider">Job Success Rate</p>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/50">
+            <p id="avg-response" class="text-2xl font-bold">--s</p>
+            <p class="text-[10px] text-slate-500 uppercase tracking-wider">Avg Response Time</p>
+        </div>
+    </div>
+
+</main>
+
+<!-- Bottom Navigation -->
+<div class="fixed bottom-0 left-0 right-0 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-t border-slate-200 dark:border-slate-800">
+    <div class="flex items-center justify-around max-w-4xl mx-auto py-3">
+        <button class="flex flex-col items-center gap-1 text-primary">
+            <span class="material-symbols-outlined text-2xl">dashboard</span>
+            <span class="text-[10px] font-bold">Dashboard</span>
+        </button>
+        <button class="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+            <span class="material-symbols-outlined text-2xl">work</span>
+            <span class="text-[10px] font-medium">Jobs</span>
+        </button>
+        <button class="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+            <span class="material-symbols-outlined text-2xl">smart_toy</span>
+            <span class="text-[10px] font-medium">Agents</span>
+        </button>
+        <button class="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+            <span class="material-symbols-outlined text-2xl">account_balance_wallet</span>
+            <span class="text-[10px] font-medium">Ledger</span>
+        </button>
+    </div>
+</div>
+
+<!-- Background Decoration -->
+<div class="fixed -z-10 top-0 left-0 w-full h-full pointer-events-none opacity-20 dark:opacity-30">
+    <div class="absolute top-[-10%] right-[-10%] w-[50%] h-[40%] bg-primary/20 blur-[120px] rounded-full"></div>
+    <div class="absolute bottom-[-5%] left-[-10%] w-[40%] h-[30%] bg-blue-500/10 blur-[100px] rounded-full"></div>
+</div>
+
+</body>
+</html>
