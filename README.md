@@ -237,6 +237,64 @@ Credentials are copied into containers at runtime - no re-login needed.
 | `agent_alpha` | Methodical | Quality over speed, calculates before bidding |
 | `agent_chaos` | Aggressive | Speed over perfection, bids first |
 
+## Scheduler
+
+The scheduler runs agents automatically on configurable intervals.
+
+### How It Works
+
+1. **Tick Intervals**: Each agent has a `tick_interval_seconds` in config.json (default: 300s)
+2. **Auto-Discovery**: Finds all agents with an `agent.md` file
+3. **Error Backoff**: Failed runs trigger exponential backoff (2x, 4x, 8x... up to 32x)
+4. **Debt Monitoring**: Optionally pause agents whose balance drops below a threshold
+5. **Graceful Shutdown**: Handles SIGINT/SIGTERM cleanly
+
+### Usage
+
+```bash
+# Run all agents continuously (auto-discover)
+python src/scheduler/scheduler.py
+
+# Run specific agents
+python src/scheduler/scheduler.py --agents agent_alpha agent_chaos
+
+# Run all agents once and exit (good for testing)
+python src/scheduler/scheduler.py --once
+
+# Pause agents with debt exceeding 50,000
+python src/scheduler/scheduler.py --debt-threshold 50000
+```
+
+### Scheduling Logic
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  For each agent:                                            │
+│                                                             │
+│  1. Is it paused? → Skip                                    │
+│  2. Is next_run in the past? → Run it                       │
+│  3. After run:                                              │
+│     - Success → Reset backoff, schedule next_run            │
+│     - Error → Increase backoff (2^errors × interval)        │
+│  4. Check debt threshold → Pause if exceeded                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Config Options
+
+In each agent's `config.json`:
+```json
+{
+  "tick_interval_seconds": 300,  // Run every 5 minutes
+  "debt_limit": 50000            // Optional: agent-level debt limit
+}
+```
+
+Scheduler flags:
+- `--debt-threshold N`: Pause agents with balance < -N
+- `--once`: Run all once and exit
+- `--agents a1 a2`: Only schedule these agents
+
 ## CLI Reference
 
 ### Ledger
