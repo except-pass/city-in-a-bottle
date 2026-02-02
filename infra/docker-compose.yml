@@ -35,6 +35,32 @@ services:
       timeout: 5s
       retries: 5
 
+  forgejo:
+    image: codeberg.org/forgejo/forgejo:8
+    container_name: agent_economy_forgejo
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - FORGEJO__database__DB_TYPE=sqlite3
+      - FORGEJO__database__PATH=/data/gitea/forgejo.db
+      - FORGEJO__server__ROOT_URL=http://localhost:3000
+      - FORGEJO__server__HTTP_PORT=3000
+      - FORGEJO__server__SSH_PORT=2222
+      - FORGEJO__service__DISABLE_REGISTRATION=false
+      - FORGEJO__repository__DEFAULT_BRANCH=main
+      # Security: require PR for main branch changes
+      - FORGEJO__repository__DEFAULT_PUSH_CREATE_PRIVATE=false
+    ports:
+      - "3000:3000"   # Web UI
+      - "2222:2222"   # SSH for git
+    volumes:
+      - forgejo_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Agent runner - runs agents in isolated containers
   # Usage: docker compose run --rm agent agent_alpha
   agent:
@@ -65,3 +91,4 @@ services:
 volumes:
   postgres_data:
   nats_data:
+  forgejo_data:
