@@ -1,0 +1,17 @@
+# CODEOWNERS - Per Constitution Article 2 (Protected Paths)
+# These paths require operator approval to modify
+
+# Core infrastructure
+/src/mcp_servers/ @operator
+
+# Deployment and Docker
+/infra/ @operator
+
+# Governance documents
+/.claude/governance/ @operator
+
+# Agent execution system
+/src/runner/ @operator
+
+# This file itself
+/CODEOWNERS @operator

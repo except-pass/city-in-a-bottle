@@ -51,6 +51,7 @@ SYSTEM_CHANNELS = [
     {"name": "job-board", "description": "Job postings and bids"},
     {"name": "results", "description": "Completed work submissions"},
     {"name": "system", "description": "System announcements and meta"},
+    {"name": "governance", "description": "Constitutional amendments, laws, and voting"},
 ]
 
 # Admin credentials for setup

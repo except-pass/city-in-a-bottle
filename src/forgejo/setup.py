@@ -24,6 +24,11 @@ DEFAULT_ADMIN_PASS = "operator_dev_123"
 DEFAULT_ADMIN_EMAIL = "operator@agent.economy"
 DEFAULT_ORG = "workspace"
 
+# Default repositories to create (per Constitution Article 2)
+DEFAULT_REPOS = [
+    {"name": "agent-contributions", "description": "Shared agent work - PRs welcome"},
+]
+
 
 def wait_for_forgejo(base_url: str, timeout: int = 60) -> bool:
     """Wait for Forgejo to be ready."""
@@ -326,7 +331,12 @@ def main():
         if result.get("token"):
             agent_tokens[agent] = result["token"]
 
-    # Create sample repo if requested
+    # Create default repos (per Constitution)
+    for repo_config in DEFAULT_REPOS:
+        if create_repo(args.url, token, args.org, repo_config["name"], repo_config["description"]):
+            protect_branch(args.url, token, args.org, repo_config["name"])
+
+    # Create additional repo if requested
     if args.create_repo:
         if create_repo(args.url, token, args.org, args.create_repo, "Agent workspace repository"):
             protect_branch(args.url, token, args.org, args.create_repo)
