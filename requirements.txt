@@ -22,3 +22,4 @@ uvicorn[standard]>=0.27.0
 sse-starlette>=2.0.0
 pydantic>=2.0.0
 playwright>=1.40.0  # For portal testing
+psycopg2-binary>=2.9.0  # For database access
