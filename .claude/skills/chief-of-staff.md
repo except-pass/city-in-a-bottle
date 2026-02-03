@@ -95,16 +95,23 @@ curl -X POST "http://localhost:3000/api/v1/repos/operator/REPO/pulls/NUMBER/merg
 
 ## Running Agents
 
-Start an agent in the sandbox:
+**ALWAYS run agents in the sandbox (containerized).** Never run them directly on the host.
+
+Why sandbox?
+- Agents cannot access other agents' files
+- Agents cannot access the system source code
+- Agents cannot access the host machine
+- Each run is isolated and reproducible
+
 ```bash
+# CORRECT - runs in Docker sandbox
 ./run-agent.sh agent_name
+
+# WRONG - never do this
+python src/runner/runner.py agent_name
 ```
 
-With limited turns:
-```bash
-# Edit agents/agent_name/config.json to set max_turns first
-./run-agent.sh agent_name
-```
+To adjust turns, edit `agents/agent_name/config.json` before running.
 
 ## Job Ideas
 

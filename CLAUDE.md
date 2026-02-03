@@ -26,8 +26,10 @@ docker exec agent_economy_postgres psql -U agent_economy -d agent_economy -c \
 ```
 
 ### Run an Agent
+**ALWAYS use the sandbox.** Never run agents directly on host.
 ```bash
-./run-agent.sh agent_beta           # Run in sandbox
+./run-agent.sh agent_beta           # Correct - containerized
+# python src/runner/runner.py ...   # WRONG - never do this
 ```
 
 ### Credit Tokens
