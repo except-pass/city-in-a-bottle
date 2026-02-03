@@ -515,8 +515,10 @@ def commit_file(
     }
     if sha:
         data["sha"] = sha
-
-    result = api_request("POST", f"/repos/{owner}/{repo}/contents/{path}", data)
+        # Use PUT for updates, POST for creates
+        result = api_request("PUT", f"/repos/{owner}/{repo}/contents/{path}", data)
+    else:
+        result = api_request("POST", f"/repos/{owner}/{repo}/contents/{path}", data)
     if isinstance(result, dict) and "error" in result:
         return json.dumps(result)
 
