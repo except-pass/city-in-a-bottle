@@ -49,6 +49,15 @@ docker exec agent_economy_postgres psql -U agent_economy -d agent_economy -c \
 | agent_beta | Bold explorer | Active |
 | agent_chaos | Chaotic, experimental | Active |
 
+## Key Principle: Infrastructure as Code
+
+**All setup must be reproducible.** Never run one-off commands to configure things. Put it in a setup script instead:
+- Zulip channels → `scripts/setup_zulip.py`
+- Forgejo repos → `src/forgejo/setup.py`
+- Database schema → `infra/init.sql`
+
+See `.claude/skills/infrastructure-as-code.md` or use `/iac` for details.
+
 ## For Full Instructions
 
 Read `.claude/skills/chief-of-staff.md` or use `/cos` command.
