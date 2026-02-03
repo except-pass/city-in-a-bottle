@@ -1,17 +1,35 @@
 #!/usr/bin/env python3
 """
-Zulip Setup Script
+Zulip Setup Script - Fully Automated
 
-Initializes Zulip for the agent economy:
-1. Waits for Zulip to be ready
-2. Creates admin user and organization
-3. Creates system channels (#job-board, #results, #system)
-4. Creates bot accounts for each agent
-5. Saves bot credentials to agent directories
-6. Subscribes bots to system channels
+Initializes Zulip for the agent economy with zero manual steps.
+Safe to run multiple times (idempotent) - will not recreate existing resources.
+
+How it works:
+1. Waits for Zulip container to be healthy
+2. Creates realm and admin user via Django management commands (if needed)
+3. Sets/ensures admin password via Django shell
+4. Creates system channels (#job-board, #results, #system) via API
+5. Creates bot accounts for each agent in agents/ directory
+6. Saves bot credentials (.zuliprc) to agent directories
+7. Subscribes bots to system channels
 
 Usage:
-    python scripts/setup_zulip.py [--zulip-url URL] [--agents-dir DIR]
+    # Full setup (waits for Zulip to be ready)
+    python scripts/setup_zulip.py
+
+    # Skip wait (Zulip already running)
+    python scripts/setup_zulip.py --skip-wait
+
+    # Custom Zulip URL
+    python scripts/setup_zulip.py --zulip-url https://zulip.example.com
+
+Prerequisites:
+    - Docker with agent_economy_zulip container running
+    - requests library: pip install requests
+
+Configuration:
+    Admin credentials are set below. Change for production deployments.
 """
 
 import argparse
@@ -23,6 +41,10 @@ import time
 from pathlib import Path
 
 import requests
+import urllib3
+
+# Disable SSL warnings for self-signed certs
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # System channels that all bots should be subscribed to
 SYSTEM_CHANNELS = [
@@ -42,8 +64,8 @@ def wait_for_zulip(base_url: str, max_attempts: int = 60, delay: int = 5) -> boo
 
     for attempt in range(max_attempts):
         try:
-            resp = requests.get(f"{base_url}/health", timeout=5)
-            if resp.status_code == 200:
+            resp = requests.get(f"{base_url}/health", timeout=5, verify=False)
+            if resp.status_code in (200, 403):  # 403 is OK - means server is up
                 print("Zulip is ready!")
                 return True
         except requests.exceptions.RequestException:
@@ -57,69 +79,105 @@ def wait_for_zulip(base_url: str, max_attempts: int = 60, delay: int = 5) -> boo
 
 
 def run_zulip_manage(container: str, *args) -> subprocess.CompletedProcess:
-    """Run a Zulip management command in the container."""
-    cmd = ["docker", "exec", container, "/home/zulip/deployments/current/manage.py"] + list(args)
+    """Run a Zulip management command in the container as zulip user.
+
+    Uses `docker exec -u zulip` to run commands as the zulip user,
+    which is required for accessing Zulip secrets and databases.
+    """
+    cmd = [
+        "docker", "exec", "-u", "zulip", container,
+        "/home/zulip/deployments/current/manage.py"
+    ] + list(args)
     return subprocess.run(cmd, capture_output=True, text=True)
 
 
+def ensure_admin_password(container: str) -> bool:
+    """Ensure admin user has the correct password set.
+
+    This is needed because Zulip may auto-create the admin user
+    from SETTING_ZULIP_ADMINISTRATOR but without a password.
+    """
+    result = run_zulip_manage(
+        container, "shell", "-c",
+        f"""
+from zerver.models import UserProfile
+user = UserProfile.objects.get(delivery_email='{ADMIN_EMAIL}')
+user.set_password('{ADMIN_PASSWORD}')
+user.is_realm_admin = True
+user.save()
+print('OK')
+"""
+    )
+    return "OK" in result.stdout
+
+
 def create_admin_user(container: str) -> bool:
-    """Create the admin user for the organization."""
+    """Create the admin user for the organization.
+
+    Handles several scenarios:
+    1. Fresh Zulip: Creates realm + admin user
+    2. Auto-created realm (from env vars): Creates admin user in existing realm
+    3. Existing admin: Just ensures password is set correctly
+    """
     print("Creating admin user...")
 
-    # Check if admin exists
+    # Check if admin exists (in any realm)
     result = run_zulip_manage(
         container, "shell", "-c",
         f"from zerver.models import UserProfile; print(UserProfile.objects.filter(delivery_email='{ADMIN_EMAIL}').exists())"
     )
 
     if "True" in result.stdout:
-        print("  Admin user already exists")
-        return True
+        print("  Admin user already exists, ensuring password is set...")
+        if ensure_admin_password(container):
+            print("  Admin user ready")
+            return True
+        else:
+            print("  Warning: Could not set admin password")
+            return True  # Continue anyway, user might have set a custom password
 
-    # Create the realm first if needed
+    # Check if main realm exists (empty string_id = root domain)
     result = run_zulip_manage(
         container, "shell", "-c",
-        "from zerver.models import Realm; print(Realm.objects.filter(string_id='agent-economy').exists())"
+        "from zerver.models import Realm; print(Realm.objects.filter(string_id='').exists())"
     )
 
-    if "True" not in result.stdout:
-        print("  Creating realm 'agent-economy'...")
+    if "True" in result.stdout:
+        print("  Realm already exists, creating admin user...")
+        # Create admin user in existing realm
+        result = run_zulip_manage(
+            container, "create_user",
+            "--realm", "",  # Empty string = root domain
+            "--email", ADMIN_EMAIL,
+            "--full-name", "Admin",
+            "--password", ADMIN_PASSWORD,
+            "--is-admin"
+        )
+    else:
+        print("  Creating realm and admin user...")
+        # Create realm with admin user in one command
         result = run_zulip_manage(
             container, "create_realm",
-            "--realm-subdomain", "agent-economy",
-            "--realm-name", "Agent Economy"
+            "--string-id", "",  # Root domain
+            "--password", ADMIN_PASSWORD,
+            "Agent Economy",
+            ADMIN_EMAIL,
+            "Admin"
         )
-        if result.returncode != 0:
-            print(f"  Warning: create_realm output: {result.stderr}")
-
-    # Create admin user
-    result = run_zulip_manage(
-        container, "create_user",
-        "--realm", "agent-economy",
-        "--email", ADMIN_EMAIL,
-        "--full-name", "Admin",
-        "--password", ADMIN_PASSWORD,
-        "--is-admin"
-    )
 
     if result.returncode != 0 and "already exists" not in result.stderr.lower():
-        print(f"  Error creating admin: {result.stderr}")
+        print(f"  Error: {result.stderr}")
         return False
 
-    print("  Admin user created")
+    print("  Admin user ready")
     return True
 
 
 def get_admin_api_key(container: str) -> str | None:
-    """Get or create API key for admin user."""
+    """Get API key for admin user."""
     result = run_zulip_manage(
         container, "shell", "-c",
-        f"""
-from zerver.models import UserProfile
-from zerver.lib.api_keys import get_api_key
-user = UserProfile.objects.get(delivery_email='{ADMIN_EMAIL}')
-print(get_api_key(user))
-"""
+        f"from zerver.models import UserProfile; u = UserProfile.objects.get(delivery_email='{ADMIN_EMAIL}'); print(u.api_key)"
     )
 
     if result.returncode == 0:
@@ -146,7 +204,8 @@ def create_channels(base_url: str, admin_email: str, api_key: str) -> bool:
                     "name": channel["name"],
                     "description": channel["description"],
                 }])
-            }
+            },
+            verify=False
         )
 
         if resp.status_code == 200:
@@ -183,7 +242,8 @@ def create_bot(base_url: str, admin_email: str, api_key: str, agent_name: str) -
             "short_name": bot_name,
             "full_name": full_name,
             "bot_type": 1,  # Generic bot
-        }
+        },
+        verify=False
     )
 
     if resp.status_code == 200:
@@ -194,19 +254,23 @@ def create_bot(base_url: str, admin_email: str, api_key: str, agent_name: str) -
                 "api_key": result["api_key"],
                 "email": f"{bot_name}-bot@agent-economy.zulip.localhost",
             }
-    elif resp.status_code == 400 and "already exists" in resp.text.lower():
-        # Bot exists, get its info
+    elif resp.status_code == 400 and ("already exists" in resp.text.lower() or "already in use" in resp.text.lower()):
+        # Bot exists, get its info from the bots list
         resp = requests.get(
             f"{base_url}/api/v1/bots",
             auth=(admin_email, api_key),
+            verify=False
         )
         if resp.status_code == 200:
             for bot in resp.json().get("bots", []):
-                if bot.get("short_name") == bot_name or bot_name in bot.get("email", ""):
+                # Bot email can be in "email" or "username" field depending on API version
+                bot_email = bot.get("email") or bot.get("username", "")
+                # Match by bot name in the email/username (e.g., "agent-alpha-bot@...")
+                if f"{bot_name}-bot" in bot_email:
                     return {
-                        "user_id": bot["user_id"],
+                        "user_id": bot.get("user_id"),
                         "api_key": bot["api_key"],
-                        "email": bot["email"],
+                        "email": bot_email,
                     }
 
     print(f"    Error creating bot: {resp.status_code} - {resp.text}")
@@ -220,7 +284,8 @@ def subscribe_bot_to_channels(base_url: str, bot_email: str, api_key: str) -> bo
     resp = requests.post(
         f"{base_url}/api/v1/users/me/subscriptions",
         auth=(bot_email, api_key),
-        data={"subscriptions": json.dumps(subscriptions)}
+        data={"subscriptions": json.dumps(subscriptions)},
+        verify=False
     )
 
     return resp.status_code == 200 and resp.json().get("result") == "success"
@@ -283,8 +348,8 @@ def main():
     parser = argparse.ArgumentParser(description="Set up Zulip for agent economy")
     parser.add_argument(
         "--zulip-url",
-        default=os.environ.get("ZULIP_URL", "http://localhost:8080"),
-        help="Zulip server URL (default: http://localhost:8080)"
+        default=os.environ.get("ZULIP_URL", "https://localhost:8443"),
+        help="Zulip server URL (default: https://localhost:8443)"
     )
     parser.add_argument(
         "--agents-dir",

@@ -562,8 +562,8 @@ if __name__ == "__main__":
         parser.add_argument("--agents-dir", default="agents", help="Agents base directory")
         parser.add_argument("--nats-url", default="nats://localhost:4222", help="NATS URL")
         parser.add_argument("--zulip-url", default="http://localhost:8080", help="Zulip URL")
-        parser.add_argument("--message-bus", default="nats", choices=["nats", "zulip"],
-                          help="Message bus to use (nats or zulip)")
+        parser.add_argument("--message-bus", default="zulip", choices=["nats", "zulip"],
+                          help="Message bus to use (default: zulip)")
         parser.add_argument("--postgres-host", default="localhost", help="Postgres host")
 
         args = parser.parse_args()

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16
@@ -35,8 +33,8 @@ services:
       SETTING_RABBITMQ_PASSWORD: zulip_rabbitmq_dev
       # Memcached - single line
       SETTING_CACHES: '{"default": {"BACKEND": "django_bmemcached.memcached.BMemcached", "LOCATION": "memcached-zulip:11211"}}'
-      # Server settings
-      SETTING_EXTERNAL_HOST: localhost:8080
+      # Server settings - use HTTPS port since Zulip forces HTTPS redirect
+      SETTING_EXTERNAL_HOST: localhost:8443
       SETTING_ZULIP_ADMINISTRATOR: admin@agent-economy.local
       # Disable email - not needed for agent communication
       SETTING_EMAIL_BACKEND: django.core.mail.backends.console.EmailBackend
@@ -46,10 +44,13 @@ services:
       SECRETS_secret_key: "dev-secret-key-change-in-production-1234567890"
       SECRETS_rabbitmq_password: zulip_rabbitmq_dev
       SECRETS_postgres_password: zulip_dev
+      SECRETS_redis_password: zulip_redis_dev
       # Disable push notifications
       SETTING_PUSH_NOTIFICATION_BOUNCER_URL: ""
       # SSL - auto-generate self-signed certs for dev
       SSL_CERTIFICATE_GENERATION: self-signed
+      # Skip dictionary files (not needed for dev, avoids postgres setup complexity)
+      SETTING_POSTGRESQL_MISSING_DICTIONARIES: "True"
       # Organization settings
       SETTING_DEFAULT_REALM_NAME: "Agent Economy"
       SETTING_ZULIP_ORG_NAME: "Agent Economy"
@@ -75,7 +76,7 @@ services:
       start_period: 60s
 
   postgresql-zulip:
-    image: postgres:16
+    image: zulip/zulip-postgresql:14
     container_name: agent_economy_postgresql_zulip
     environment:
       POSTGRES_USER: zulip
@@ -92,6 +93,7 @@ services:
   redis-zulip:
     image: redis:7-alpine
     container_name: agent_economy_redis_zulip
+    command: ["redis-server", "--requirepass", "zulip_redis_dev"]
     volumes:
       - redis_zulip_data:/data
 
@@ -108,23 +110,6 @@ services:
     image: memcached:1.6-alpine
     container_name: agent_economy_memcached_zulip
     command: ["-m", "256"]
-
-  # NATS - legacy, will be removed after Zulip migration
-  nats:
-    image: nats:2.10
-    container_name: agent_economy_nats
-    command: ["-c", "/etc/nats/nats.conf"]
-    ports:
-      - "4222:4222"   # Client connections
-      - "8222:8222"   # HTTP monitoring
-    volumes:
-      - ./nats.conf:/etc/nats/nats.conf
-      - nats_data:/data
-    healthcheck:
-      test: ["CMD", "nats-server", "--help"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
 
   forgejo:
     image: codeberg.org/forgejo/forgejo:8
@@ -154,7 +139,6 @@ services:
 
   # Agent runner - runs agents in isolated containers
   # Usage: docker compose run --rm agent agent_alpha
-  # For Zulip: docker compose run --rm -e MESSAGE_BUS=zulip agent agent_alpha
   agent:
     build:
       context: ../
@@ -165,9 +149,7 @@ services:
       # Mount agents directory for persistent memory
       - ../agents:/app/agents
     environment:
-      # Message bus configuration (nats or zulip)
-      - MESSAGE_BUS=${MESSAGE_BUS:-nats}
-      - NATS_URL=nats://nats:4222
+      # Zulip message bus
       - ZULIP_URL=http://zulip:80
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
@@ -177,7 +159,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      nats:
+      zulip:
         condition: service_healthy
     # Don't start by default - run manually
     profiles:
@@ -185,7 +167,6 @@ services:
 
 volumes:
   postgres_data:
-  nats_data:
   forgejo_data:
   zulip_data:
   postgresql_zulip_data:

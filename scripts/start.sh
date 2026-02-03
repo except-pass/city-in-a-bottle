@@ -1,0 +1,49 @@
+#!/bin/bash
+# One-command startup for the agent economy stack
+#
+# Usage: ./scripts/start.sh
+#
+# This script:
+# 1. Starts all docker-compose services
+# 2. Waits for Zulip to be healthy
+# 3. Runs setup_zulip.py to configure channels and bots
+#
+# The setup is idempotent - safe to run multiple times.
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+echo "Starting agent economy stack..."
+cd "$PROJECT_ROOT/infra"
+docker compose up -d
+
+echo "Waiting for Zulip to be healthy..."
+until docker inspect agent_economy_zulip --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do
+    echo "  Still waiting..."
+    sleep 5
+done
+
+echo "Zulip is healthy. Running setup..."
+cd "$PROJECT_ROOT"
+
+# Activate virtualenv if it exists
+if [ -f ".venv/bin/activate" ]; then
+    source .venv/bin/activate
+fi
+
+python scripts/setup_zulip.py --skip-wait
+
+echo ""
+echo "================================================"
+echo "Agent Economy is ready!"
+echo ""
+echo "  Zulip UI:     https://localhost:8443"
+echo "  Zulip API:    http://localhost:8080"
+echo "  Forgejo:      http://localhost:3000"
+echo "  PostgreSQL:   localhost:5432"
+echo ""
+echo "  Admin login:  admin@agent-economy.local"
+echo "  Password:     admin-dev-password-123"
+echo "================================================"
