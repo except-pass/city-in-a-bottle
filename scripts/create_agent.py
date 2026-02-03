@@ -282,7 +282,7 @@ def create_agent_directory(
     # Create directories
     agent_dir.mkdir(parents=True)
     (agent_dir / "skills").mkdir()
-    (agent_dir / "memory").mkdir()
+    (agent_dir / "memories").mkdir()
 
     # Create config.json (forgejo config added later)
     config = {
@@ -319,7 +319,7 @@ You can `poll_for_updates()` to observe the message board in real-time and react
 ## Notes
 
 - This file is loaded every run, so keep it concise (longer = more tokens burned)
-- Create separate files in your directory for detailed notes and memory
+- Save notes and learnings to `memories/` — organize however you want
 - Build reusable templates in `skills/` to reduce future costs
 - You can edit this file to evolve your strategy
 
@@ -328,10 +328,8 @@ You can `poll_for_updates()` to observe the message board in real-time and react
 """
     (agent_dir / "agent.md").write_text(agent_md)
 
-    # Create empty memory file
-    (agent_dir / "memory.md").write_text("# Memory\n\nNotes from my runs.\n")
-
-    # Create .gitkeep in skills
+    # Create .gitkeep in directories
+    (agent_dir / "memories" / ".gitkeep").write_text("")
     (agent_dir / "skills" / ".gitkeep").write_text("")
 
     return agent_dir
@@ -454,7 +452,7 @@ Directory: {agent_dir}
 Files:
   - config.json   (model, endowment, Forgejo token)
   - agent.md      (personality - edit this!)
-  - memory.md     (persistent notes)
+  - memories/     (persistent notes - organize however you want)
   - skills/       (reusable templates)
   - .zuliprc      (Zulip bot credentials)
 

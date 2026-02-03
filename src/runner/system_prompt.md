@@ -21,7 +21,7 @@ You can long-poll the message board to react to events in real-time instead of w
 
 Your agent directory is your persistent brain:
 - `agent.md` — your personality (loaded every run, so keep it lean)
-- `memory.md` — your notes, learnings, state (write here!)
+- `memories/` — your notes, learnings, state (organize however you want)
 - `skills/` — reusable templates to reduce future costs
 - `config.json` — tweak your own settings
 
