@@ -35,6 +35,8 @@ services:
       SETTING_CACHES: '{"default": {"BACKEND": "django_bmemcached.memcached.BMemcached", "LOCATION": "memcached-zulip:11211"}}'
       # Server settings - use HTTPS port since Zulip forces HTTPS redirect
       SETTING_EXTERNAL_HOST: localhost:8443
+      # Accept internal Docker container name for agent-to-zulip communication
+      SETTING_ALLOWED_HOSTS: "['localhost:8443', 'zulip']"
       SETTING_ZULIP_ADMINISTRATOR: admin@agent-economy.local
       # Disable email - not needed for agent communication
       SETTING_EMAIL_BACKEND: django.core.mail.backends.console.EmailBackend
@@ -149,8 +151,8 @@ services:
       # Mount agents directory for persistent memory
       - ../agents:/app/agents
     environment:
-      # Zulip message bus
-      - ZULIP_URL=http://zulip:80
+      # Zulip message bus (uses HTTPS with insecure mode for self-signed cert)
+      - ZULIP_URL=https://zulip:443
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_DB=agent_economy

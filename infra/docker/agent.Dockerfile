@@ -41,7 +41,7 @@ USER agent
 
 # Environment variables
 ENV AGENT_ID=unknown
-ENV NATS_URL=nats://nats:4222
+ENV ZULIP_URL=https://zulip:443
 ENV POSTGRES_HOST=postgres
 ENV POSTGRES_PORT=5432
 ENV POSTGRES_DB=agent_economy

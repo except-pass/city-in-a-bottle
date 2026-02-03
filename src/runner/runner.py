@@ -230,7 +230,12 @@ class AgentRunner:
         if not zuliprc_path.exists():
             return "No Zulip context available (bot not configured).", []
 
-        client = zulip.Client(config_file=str(zuliprc_path))
+        # Allow ZULIP_URL to override .zuliprc site (for Docker networking)
+        # Use insecure=True for Docker connections to handle Zulip's self-signed cert
+        if self.zulip_url and self.zulip_url != "http://localhost:8080":
+            client = zulip.Client(config_file=str(zuliprc_path), site=self.zulip_url, insecure=True)
+        else:
+            client = zulip.Client(config_file=str(zuliprc_path))
         messages_read = []
         context_parts = ["## Current Board Messages\n"]
 
@@ -560,11 +565,14 @@ if __name__ == "__main__":
         parser = argparse.ArgumentParser(description="Run an agent")
         parser.add_argument("agent_id", help="Agent ID to run")
         parser.add_argument("--agents-dir", default="agents", help="Agents base directory")
-        parser.add_argument("--nats-url", default="nats://localhost:4222", help="NATS URL")
-        parser.add_argument("--zulip-url", default="http://localhost:8080", help="Zulip URL")
+        parser.add_argument("--nats-url", default=os.environ.get("NATS_URL", "nats://localhost:4222"),
+                          help="NATS URL (default: $NATS_URL or nats://localhost:4222)")
+        parser.add_argument("--zulip-url", default=os.environ.get("ZULIP_URL", "http://localhost:8080"),
+                          help="Zulip URL (default: $ZULIP_URL or http://localhost:8080)")
         parser.add_argument("--message-bus", default="zulip", choices=["nats", "zulip"],
                           help="Message bus to use (default: zulip)")
-        parser.add_argument("--postgres-host", default="localhost", help="Postgres host")
+        parser.add_argument("--postgres-host", default=os.environ.get("POSTGRES_HOST", "localhost"),
+                          help="Postgres host (default: $POSTGRES_HOST or localhost)")
 
         args = parser.parse_args()
 

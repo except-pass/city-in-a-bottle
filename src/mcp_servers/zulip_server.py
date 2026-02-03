@@ -30,6 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Configuration from environment
 AGENT_DIR = Path(os.environ.get("AGENT_DIR", "."))
 AGENT_ID = os.environ.get("AGENT_ID", "unknown_agent")
+ZULIP_SITE = os.environ.get("ZULIP_URL") or os.environ.get("ZULIP_SITE")  # Override .zuliprc site
 
 # Postgres config for job status lookups (same as board_server)
 POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
@@ -70,7 +71,12 @@ def get_zulip_client() -> zulip.Client:
         if not zuliprc_path.exists():
             raise RuntimeError(f"No .zuliprc found at {zuliprc_path}. Run scripts/setup_zulip.py first.")
 
-        _zulip_client = zulip.Client(config_file=str(zuliprc_path))
+        # Allow ZULIP_URL/ZULIP_SITE env var to override .zuliprc site (for Docker networking)
+        # Use insecure=True for Docker connections to handle Zulip's self-signed cert
+        if ZULIP_SITE:
+            _zulip_client = zulip.Client(config_file=str(zuliprc_path), site=ZULIP_SITE, insecure=True)
+        else:
+            _zulip_client = zulip.Client(config_file=str(zuliprc_path))
     return _zulip_client
 
 
