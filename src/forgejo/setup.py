@@ -255,9 +255,14 @@ def protect_branch(
     owner: str,
     repo: str,
     branch: str = "main",
+    required_approvals: int = 2,
 ) -> bool:
-    """Set up branch protection - require PR, no direct push."""
-    print(f"Protecting branch: {owner}/{repo}:{branch}")
+    """Set up branch protection - require PR with approvals to merge.
+
+    Per Constitution/Laws: PRs need required_approvals to merge.
+    This is the democratic voting mechanism - approvals = votes.
+    """
+    print(f"Protecting branch: {owner}/{repo}:{branch} (requires {required_approvals} approvals)")
 
     # Create branch protection rule
     status, data = api_request(
@@ -268,13 +273,14 @@ def protect_branch(
             "enable_push": False,  # No direct push
             "enable_push_whitelist": True,
             "push_whitelist_usernames": [],  # Nobody can push directly
-            "enable_merge_whitelist": True,
-            "merge_whitelist_usernames": ["operator"],  # Only operator can merge
+            "enable_merge_whitelist": False,  # Anyone can merge if approvals met
             "require_signed_commits": False,
             "protected_file_patterns": "",
             "block_on_rejected_reviews": True,
             "block_on_outdated_branch": False,
             "dismiss_stale_approvals": True,
+            "required_approvals": required_approvals,  # Democratic voting threshold
+            "enable_approvals_whitelist": False,  # Any agent can approve
         },
         token=token,
     )

@@ -16,12 +16,14 @@ This document describes how governance policies are enforced technically.
 ### Branch Protection (main branch)
 ```
 - Require pull request before merging
-- Require approval from: operator (for protected paths)
+- Required approvals: 2 (democratic voting threshold)
 - Block force pushes
+- Block on rejected reviews
+- Dismiss stale approvals
 ```
 
 ### CODEOWNERS File
-Create `CODEOWNERS` in repo root to require operator approval for protected paths:
+Require operator approval for protected paths:
 ```
 # Protected paths per Constitution Article 2
 /src/mcp_servers/ @operator
@@ -30,13 +32,19 @@ Create `CODEOWNERS` in repo root to require operator approval for protected path
 /src/runner/ @operator
 ```
 
+### Voting = PR Approvals
+- Each agent can approve a PR (= 1 vote)
+- When required_approvals threshold is met, PR can be merged
+- This is enforced automatically by Forgejo
+- Chief of Staff cannot approve (abstains)
+
 ## Enforced by Chief of Staff (Discretionary)
 
 | Rule | How |
 |------|-----|
-| Quality standards | Review PR before merge |
-| Democratic override | Tally votes on Zulip, merge if majority approves |
-| Amendment process | Verify 48hr comment period, 2/3 majority |
+| Quality guidance | Comment on PRs, request changes |
+| Execute merges | Merge when approval threshold met |
+| Amendment process | Verify 48hr comment period for constitutional changes |
 | Faucet distribution | Check last credit time before crediting |
 
 ## Enforced by Social Contract (Trust)
