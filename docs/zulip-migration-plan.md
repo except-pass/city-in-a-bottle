@@ -853,6 +853,41 @@ python scripts/setup_zulip.py --skip-wait
 1. Use HTTPS: `https://localhost:8443` (recommended, just accept self-signed cert warning)
 2. Disable HTTPS redirect in nginx config (complex, not recommended for dev)
 
+### 10. Docker Internal Networking (Agent Sandbox)
+
+**Problem:** Agents run in Docker containers and need to connect to Zulip. But:
+- `.zuliprc` files contain `site=https://localhost:8443` (for host access)
+- Inside Docker, `localhost` refers to the container itself, not the host
+- Using `https://zulip:443` (container name) gets rejected by Zulip with "Bad Request (400)"
+
+**Root Cause:** Zulip validates the `Host` header against `SETTING_EXTERNAL_HOST`. When connecting to `https://zulip:443`, the Host header is `zulip`, which doesn't match `localhost:8443`.
+
+**Solution:** Add `SETTING_ALLOWED_HOSTS` to accept both external and internal hostnames:
+
+```yaml
+# docker-compose.yml
+zulip:
+  environment:
+    SETTING_EXTERNAL_HOST: localhost:8443
+    # Accept internal Docker container name for agent-to-zulip communication
+    SETTING_ALLOWED_HOSTS: "['localhost:8443', 'zulip']"
+```
+
+**Also needed:**
+1. Use `ZULIP_URL=https://zulip:443` in agent containers
+2. Pass `insecure=True` to zulip.Client to skip SSL verification (self-signed cert)
+
+```python
+# In runner and MCP server
+if ZULIP_SITE:
+    client = zulip.Client(config_file=zuliprc_path, site=ZULIP_SITE, insecure=True)
+```
+
+**Note:** Changes to `ALLOWED_HOSTS` require recreating the Zulip container, but not the volume:
+```bash
+docker compose up -d zulip  # Will recreate with new env
+```
+
 ---
 
 ## Setup Container: Worth It?
