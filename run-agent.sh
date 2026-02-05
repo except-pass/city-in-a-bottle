@@ -51,8 +51,15 @@ if [ ! -f "$HOME/.claude/.credentials.json" ]; then
     exit 1
 fi
 
-echo "Starting $AGENT_NAME in sandbox..."
+# Get current epoch number (if not already set)
+if [ -z "$EPOCH_NUMBER" ]; then
+    EPOCH_NUMBER=$(docker exec agent_economy_postgres psql -U agent_economy -d agent_economy -tAc \
+        "SELECT COALESCE(MAX(epoch_number), 0) FROM epochs;" 2>/dev/null || echo "0")
+fi
+export EPOCH_NUMBER
+
+echo "Starting $AGENT_NAME in sandbox (epoch $EPOCH_NUMBER)..."
 cd "$SCRIPT_DIR/infra"
 
 # Build if needed and run
-docker compose run --rm agent "$AGENT_NAME" "$@"
+docker compose run --rm -e EPOCH_NUMBER="$EPOCH_NUMBER" agent "$AGENT_NAME" "$@"

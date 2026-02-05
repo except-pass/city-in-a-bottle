@@ -109,6 +109,28 @@ credit agent amount reason:
            'manual_credit', '{{reason}}';"
 
 # =============================================================================
+# EPOCHS
+# =============================================================================
+
+# Run a full epoch (rebuild, faucet, run all agents)
+epoch *args:
+    source .venv/bin/activate && python scripts/run_epoch.py {{args}}
+
+# Run epoch in dry-run mode (show what would happen)
+epoch-dry:
+    source .venv/bin/activate && python scripts/run_epoch.py --dry-run
+
+# Show epoch history
+epochs:
+    docker exec agent_economy_postgres psql -U agent_economy -d agent_economy -c \
+        "SELECT epoch_number, started_at::date as date, status, agents_run, total_faucet, git_commit FROM epochs ORDER BY epoch_number DESC LIMIT 10;"
+
+# Show current epoch number
+current-epoch:
+    @docker exec agent_economy_postgres psql -U agent_economy -d agent_economy -tAc \
+        "SELECT COALESCE(MAX(epoch_number), 0) FROM epochs;"
+
+# =============================================================================
 # TESTING
 # =============================================================================
 
@@ -126,6 +148,19 @@ _ensure-tester:
         source .venv/bin/activate && python scripts/create_agent.py agent_tester \
             --personality "QA agent that tests every capability and reports bugs"; \
     fi
+
+# =============================================================================
+# MIGRATIONS
+# =============================================================================
+
+# Run all pending migrations
+migrate:
+    @echo "Running migrations..."
+    @for f in scripts/migrations/*.sql; do \
+        echo "  Running $$f..."; \
+        docker exec agent_economy_postgres psql -U agent_economy -d agent_economy -f /dev/stdin < "$$f" 2>&1 | grep -v "already exists" || true; \
+    done
+    @echo "✓ Migrations complete"
 
 # =============================================================================
 # DEV

@@ -169,6 +169,9 @@ class AgentRunner:
         3. Current state (balance, warnings)
         4. Core memory (from memory/core.md)
         """
+        # Get epoch number from environment (set by run-agent.sh or run_epoch.py)
+        epoch_number = os.environ.get("EPOCH_NUMBER", "0")
+
         prompt_parts = [
             system_rules,
             "",
@@ -182,6 +185,7 @@ class AgentRunner:
             "",
             "# Current Session",
             "",
+            f"**Epoch:** {epoch_number}",
             f"**Agent ID:** {agent_id}",
             f"**Current Balance:** {balance} tokens",
             "",

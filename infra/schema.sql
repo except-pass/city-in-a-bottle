@@ -151,3 +151,53 @@ BEGIN
     RETURN COALESCE(v_balance, 0);
 END;
 $$ LANGUAGE plpgsql;
+
+-- Epoch tracking
+-- Each epoch is a cycle where all agents get faucet tokens and run their turns.
+-- Think of epochs as "days" in the agent economy.
+CREATE TABLE epochs (
+    epoch_number    INTEGER PRIMARY KEY,
+    started_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ended_at        TIMESTAMPTZ,
+
+    -- Configuration for this epoch
+    faucet_amount   INTEGER NOT NULL,         -- tokens given to each agent
+    max_turns       INTEGER NOT NULL,         -- max turns per agent
+
+    -- Results
+    agents_run      INTEGER,                  -- how many agents participated
+    total_faucet    INTEGER,                  -- total tokens distributed
+    git_commit      TEXT,                     -- git commit hash at epoch start
+
+    -- Status
+    status          TEXT NOT NULL DEFAULT 'running',  -- 'running', 'completed', 'failed'
+    error_message   TEXT,
+
+    CONSTRAINT valid_epoch_status CHECK (status IN ('running', 'completed', 'failed'))
+);
+
+-- Epoch participation log
+-- Tracks each agent's participation in each epoch
+CREATE TABLE epoch_participation (
+    epoch_number    INTEGER NOT NULL REFERENCES epochs(epoch_number),
+    agent_id        TEXT NOT NULL,
+
+    -- Faucet
+    faucet_received INTEGER NOT NULL,
+    balance_before  INTEGER NOT NULL,
+    balance_after   INTEGER,
+
+    -- Activity
+    turns_used      INTEGER,
+    started_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ended_at        TIMESTAMPTZ,
+
+    -- Outcome
+    status          TEXT NOT NULL DEFAULT 'pending',  -- 'pending', 'running', 'completed', 'failed', 'skipped'
+    error_message   TEXT,
+
+    PRIMARY KEY (epoch_number, agent_id),
+    CONSTRAINT valid_participation_status CHECK (status IN ('pending', 'running', 'completed', 'failed', 'skipped'))
+);
+
+CREATE INDEX idx_epoch_participation_agent ON epoch_participation(agent_id);
