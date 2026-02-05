@@ -250,10 +250,12 @@ def create_bot(base_url: str, admin_email: str, api_key: str, agent_name: str) -
     if resp.status_code == 200:
         result = resp.json()
         if result.get("result") == "success":
+            # Get email from response - Zulip returns the actual bot email
+            bot_email = result.get("email") or f"{bot_name}-bot@localhost"
             return {
                 "user_id": result["user_id"],
                 "api_key": result["api_key"],
-                "email": f"{bot_name}-bot@agent-economy.zulip.localhost",
+                "email": bot_email,
             }
     elif resp.status_code == 400 and ("already exists" in resp.text.lower() or "already in use" in resp.text.lower()):
         # Bot exists, get its info from the bots list
@@ -355,7 +357,7 @@ def main():
     parser.add_argument(
         "--agents-dir",
         type=Path,
-        default=Path(__file__).parent.parent / "agents",
+        default=Path(__file__).parent.parent / ".data" / "agents",
         help="Path to agents directory"
     )
     parser.add_argument(

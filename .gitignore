@@ -24,11 +24,8 @@ build/
 .DS_Store
 Thumbs.db
 
-# Project-specific - agent runtime data
-agents/*/memory/
-agents/*/memory.md
-agents/*/sandbox/
-agents/*/*.txt
+# Project-specific - agent runtime data (lives in .data/, outside repo code)
+.data/
 *.log
 *.tmp
 

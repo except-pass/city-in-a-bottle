@@ -148,8 +148,10 @@ services:
     volumes:
       # Mount just the credentials file (read-only)
       - ${HOME}/.claude/.credentials.json:/claude-auth/.credentials.json:ro
-      # Mount agents directory for persistent memory
-      - ../agents:/app/agents
+      # Mount agent's private directory for persistent memory
+      - ../.data/agents:/app/agents
+      # Mount the repo so agents can read/modify code and make PRs (Bill of Rights #9)
+      - ../:/repo
     environment:
       # Zulip message bus (uses HTTPS with insecure mode for self-signed cert)
       - ZULIP_URL=https://zulip:443

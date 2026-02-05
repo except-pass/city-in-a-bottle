@@ -1,33 +1,47 @@
 #!/usr/bin/env python3
 """
-Forgejo Setup for Agent Economy.
+Forgejo Setup for Agent Economy - Fully Automated.
 
 Creates:
+- Initial install (via Playwright if needed)
 - Admin user (operator)
 - Organization (workspace)
 - Agent users with limited permissions
 - Branch protection rules
 
-Run after starting Forgejo: python src/forgejo/setup.py
+Safe to run multiple times (idempotent).
+
+Usage:
+    source .venv/bin/activate
+    python src/forgejo/setup.py
+    python src/forgejo/setup.py --agents test_agent agent_alpha
 """
 
 import argparse
 import json
 import sys
 import time
+from pathlib import Path
 
 import httpx
 
+# URL for setup (from host)
 DEFAULT_URL = "http://localhost:3000"
+# URL for agents (from inside container)
+AGENT_FORGEJO_URL = "http://forgejo:3000"
 DEFAULT_ADMIN_USER = "operator"
 DEFAULT_ADMIN_PASS = "operator_dev_123"
 DEFAULT_ADMIN_EMAIL = "operator@agent.economy"
 DEFAULT_ORG = "workspace"
+DEFAULT_AGENT_PASS = "agent_dev_123"
 
 # Default repositories to create (per Constitution Article 2)
 DEFAULT_REPOS = [
     {"name": "agent-contributions", "description": "Shared agent work - PRs welcome"},
 ]
+
+# Agents directory
+AGENTS_DIR = Path(__file__).parent.parent.parent / ".data" / "agents"
 
 
 def wait_for_forgejo(base_url: str, timeout: int = 60) -> bool:
@@ -44,6 +58,147 @@ def wait_for_forgejo(base_url: str, timeout: int = 60) -> bool:
             pass
         time.sleep(2)
     return False
+
+
+def is_installed(base_url: str) -> bool:
+    """Check if Forgejo has completed initial installation."""
+    try:
+        resp = httpx.get(f"{base_url}/api/v1/version", timeout=5)
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
+def run_install_wizard(base_url: str, admin_user: str, admin_pass: str, admin_email: str) -> bool:
+    """Run the Forgejo install wizard using Playwright."""
+    print("Running initial install wizard via Playwright...")
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("ERROR: Playwright not installed. Run: pip install playwright && playwright install chromium")
+        return False
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+
+        try:
+            # Go to install page
+            page.goto(f"{base_url}/install", timeout=30000)
+            page.wait_for_load_state("networkidle")
+
+            # Check if we're on install page or redirected (already installed)
+            if "/install" not in page.url:
+                print("  Already installed (redirected from install page)")
+                browser.close()
+                return True
+
+            # Fill in the install form
+            # Database settings - SQLite is default, leave it
+
+            # General settings - Instance title (if visible)
+            instance_title = page.locator('input[id="app_name"]')
+            if instance_title.count() > 0 and instance_title.is_visible():
+                instance_title.fill("Agent Economy")
+
+            # Expand "Administrator account settings" section
+            # Use JavaScript to expand all collapsed sections and make admin fields visible
+            page.evaluate("""
+                // Expand all details elements
+                document.querySelectorAll('details').forEach(d => d.setAttribute('open', 'open'));
+                // Also try to make admin section visible by removing hidden classes
+                const adminSection = document.querySelector('#admin_name')?.closest('.field, .fields, details, .hidden');
+                if (adminSection) {
+                    adminSection.style.display = 'block';
+                    adminSection.classList.remove('hidden');
+                }
+                // Make the admin input itself visible
+                const adminInput = document.querySelector('#admin_name');
+                if (adminInput) {
+                    adminInput.style.display = 'block';
+                    adminInput.style.visibility = 'visible';
+                    // Also show parent elements
+                    let parent = adminInput.parentElement;
+                    while (parent && parent !== document.body) {
+                        parent.style.display = parent.style.display === 'none' ? 'block' : parent.style.display;
+                        parent.style.visibility = 'visible';
+                        if (parent.tagName === 'DETAILS') parent.setAttribute('open', 'open');
+                        parent = parent.parentElement;
+                    }
+                }
+            """)
+            page.wait_for_timeout(1000)
+
+            # Take debug screenshot
+            page.screenshot(path="/tmp/forgejo_debug_expanded.png", full_page=True)
+
+            # Now fill admin fields using JavaScript as fallback if needed
+            admin_name = page.locator('input[id="admin_name"]')
+            if not admin_name.is_visible():
+                # Force fill via JavaScript
+                page.evaluate(f"""
+                    const input = document.querySelector('#admin_name');
+                    if (input) {{
+                        input.value = '{admin_user}';
+                        input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    }}
+                """)
+            else:
+                admin_name.fill(admin_user)
+
+            # Fill password fields
+            admin_passwd = page.locator('input[id="admin_passwd"]')
+            if admin_passwd.is_visible():
+                admin_passwd.fill(admin_pass)
+            else:
+                page.evaluate(f"""
+                    const input = document.querySelector('#admin_passwd');
+                    if (input) {{ input.value = '{admin_pass}'; input.dispatchEvent(new Event('input', {{ bubbles: true }})); }}
+                """)
+
+            admin_confirm = page.locator('input[id="admin_confirm_passwd"]')
+            if admin_confirm.is_visible():
+                admin_confirm.fill(admin_pass)
+            else:
+                page.evaluate(f"""
+                    const input = document.querySelector('#admin_confirm_passwd');
+                    if (input) {{ input.value = '{admin_pass}'; input.dispatchEvent(new Event('input', {{ bubbles: true }})); }}
+                """)
+
+            admin_email_field = page.locator('input[id="admin_email"]')
+            if admin_email_field.is_visible():
+                admin_email_field.fill(admin_email)
+            else:
+                page.evaluate(f"""
+                    const input = document.querySelector('#admin_email');
+                    if (input) {{ input.value = '{admin_email}'; input.dispatchEvent(new Event('input', {{ bubbles: true }})); }}
+                """)
+
+            # Find and click "Install Forgejo" button
+            submit_button = page.locator('button:has-text("Install Forgejo")')
+            if submit_button.count() == 0:
+                submit_button = page.locator('button[type="submit"]')
+
+            # Scroll to button and click
+            submit_button.scroll_into_view_if_needed()
+            submit_button.click()
+
+            # Wait for redirect (install complete) - can take a while
+            page.wait_for_url(lambda url: "/install" not in url, timeout=120000)
+
+            print("  Install wizard completed successfully!")
+            browser.close()
+            return True
+
+        except Exception as e:
+            print(f"  Install wizard error: {e}")
+            # Take screenshot for debugging
+            screenshot_path = "/tmp/forgejo_install_error.png"
+            page.screenshot(path=screenshot_path, full_page=True)
+            print(f"  Screenshot saved to {screenshot_path}")
+            browser.close()
+            return False
 
 
 def api_request(
@@ -77,34 +232,12 @@ def api_request(
             return resp.status_code, {"text": resp.text}
 
 
-def create_admin_user(base_url: str, username: str, password: str, email: str) -> bool:
-    """Create the initial admin user via the install API."""
-    print(f"Creating admin user: {username}")
-
-    # First check if already installed
-    status, _ = api_request("GET", f"{base_url}/api/v1/users/{username}")
-    if status == 200:
-        print(f"  User {username} already exists")
-        return True
-
-    # Try to create via install endpoint (only works on fresh install)
-    # Forgejo requires first user to be created via web UI or CLI
-    # We'll use the admin create user API if we have a token
-
-    print(f"  Note: Create admin user via Forgejo web UI at {base_url}")
-    print(f"  Username: {username}")
-    print(f"  Password: {password}")
-    print(f"  Email: {email}")
-    print(f"  Check 'Administrator' option")
-    return False
-
-
 def get_or_create_token(base_url: str, username: str, password: str) -> str:
     """Get an API token for the user."""
     print(f"Getting API token for {username}...")
 
-    # Try basic auth to create token
     with httpx.Client(timeout=30) as client:
+        # First try to create a new token
         resp = client.post(
             f"{base_url}/api/v1/users/{username}/tokens",
             auth=(username, password),
@@ -114,13 +247,36 @@ def get_or_create_token(base_url: str, username: str, password: str) -> str:
             token = resp.json().get("sha1")
             print(f"  Created new token")
             return token
-        elif resp.status_code == 422:
-            # Token with this name exists, try to use existing
-            print(f"  Token already exists, please provide it manually")
-            return ""
-        else:
-            print(f"  Failed to create token: {resp.status_code} {resp.text}")
-            return ""
+        elif resp.status_code in (400, 422) and "already" in resp.text.lower():
+            # Token exists, delete and recreate
+            print(f"  Token exists, recreating...")
+            # List tokens
+            resp = client.get(
+                f"{base_url}/api/v1/users/{username}/tokens",
+                auth=(username, password),
+            )
+            if resp.status_code == 200:
+                for tok in resp.json():
+                    if tok.get("name") == "agent-economy-setup":
+                        # Delete it
+                        client.delete(
+                            f"{base_url}/api/v1/users/{username}/tokens/{tok['id']}",
+                            auth=(username, password),
+                        )
+                        break
+            # Create new
+            resp = client.post(
+                f"{base_url}/api/v1/users/{username}/tokens",
+                auth=(username, password),
+                json={"name": "agent-economy-setup", "scopes": ["all"]},
+            )
+            if resp.status_code == 201:
+                token = resp.json().get("sha1")
+                print(f"  Created new token")
+                return token
+
+        print(f"  Failed to create token: {resp.status_code} {resp.text}")
+        return ""
 
 
 def create_organization(base_url: str, token: str, org_name: str) -> bool:
@@ -190,14 +346,29 @@ def create_agent_user(
     if status == 204:
         print(f"  Added {username} to {org_name}")
     else:
-        print(f"  Note: Could not add to org (may need manual setup): {status}")
+        print(f"  Note: Could not add to org: {status}")
 
     # Create token for agent
     with httpx.Client(timeout=30) as client:
+        # Delete existing token if any
+        resp = client.get(
+            f"{base_url}/api/v1/users/{username}/tokens",
+            auth=(username, password),
+        )
+        if resp.status_code == 200:
+            for tok in resp.json():
+                if tok.get("name") == "agent-token":
+                    client.delete(
+                        f"{base_url}/api/v1/users/{username}/tokens/{tok['id']}",
+                        auth=(username, password),
+                    )
+                    break
+
+        # Create new token
         resp = client.post(
             f"{base_url}/api/v1/users/{username}/tokens",
             auth=(username, password),
-            json={"name": "agent-token", "scopes": ["write:repository", "read:organization"]},
+            json={"name": "agent-token", "scopes": ["read:user", "write:repository", "read:repository", "write:issue", "read:organization"]},
         )
         if resp.status_code == 201:
             agent_token = resp.json().get("sha1")
@@ -206,6 +377,26 @@ def create_agent_user(
         else:
             print(f"  Failed to create token: {resp.status_code}")
             return {"username": username, "token": ""}
+
+
+def save_agent_forgejo_config(agent_name: str, forgejo_url: str, token: str) -> bool:
+    """Save Forgejo credentials to agent's config.json."""
+    agent_dir = AGENTS_DIR / agent_name
+    config_path = agent_dir / "config.json"
+
+    if not config_path.exists():
+        print(f"  Warning: Agent config not found at {config_path}")
+        return False
+
+    config = json.loads(config_path.read_text())
+    config["forgejo"] = {
+        "url": forgejo_url,
+        "username": agent_name,
+        "token": token,
+    }
+    config_path.write_text(json.dumps(config, indent=4) + "\n")
+    print(f"  Saved Forgejo config to {config_path}")
+    return True
 
 
 def create_repo(
@@ -287,12 +478,23 @@ def protect_branch(
     if status == 201:
         print(f"  Branch protection enabled")
         return True
-    elif status == 422:
+    elif status == 422 or status == 403:
         print(f"  Branch protection may already exist")
         return True
     else:
         print(f"  Failed to protect branch: {status} {data}")
         return False
+
+
+def discover_agents() -> list[str]:
+    """Find all agent directories."""
+    agents = []
+    if not AGENTS_DIR.exists():
+        return agents
+    for item in AGENTS_DIR.iterdir():
+        if item.is_dir() and (item / "config.json").exists():
+            agents.append(item.name)
+    return sorted(agents)
 
 
 def main():
@@ -302,11 +504,10 @@ def main():
     parser.add_argument("--admin-pass", default=DEFAULT_ADMIN_PASS, help="Admin password")
     parser.add_argument("--admin-email", default=DEFAULT_ADMIN_EMAIL, help="Admin email")
     parser.add_argument("--org", default=DEFAULT_ORG, help="Organization name")
-    parser.add_argument("--token", help="Admin API token (if already created)")
-    parser.add_argument("--agents", nargs="+", default=["agent_alpha", "agent_chaos"],
-                        help="Agent usernames to create")
-    parser.add_argument("--agent-pass", default="agent_dev_123", help="Password for agent users")
-    parser.add_argument("--create-repo", help="Create a sample repository")
+    parser.add_argument("--token", help="Admin API token (skip install if provided)")
+    parser.add_argument("--agents", nargs="*", help="Agent usernames to create (default: discover from .data/agents/)")
+    parser.add_argument("--agent-pass", default=DEFAULT_AGENT_PASS, help="Password for agent users")
+    parser.add_argument("--skip-install", action="store_true", help="Skip install wizard check")
     args = parser.parse_args()
 
     # Wait for Forgejo
@@ -314,15 +515,23 @@ def main():
         print("ERROR: Forgejo not available")
         sys.exit(1)
 
-    # Get or prompt for admin token
+    # Check if installed, run wizard if not
+    if not args.skip_install and not args.token:
+        if not is_installed(args.url):
+            if not run_install_wizard(args.url, args.admin_user, args.admin_pass, args.admin_email):
+                print("ERROR: Failed to complete install wizard")
+                sys.exit(1)
+            # Wait a moment for Forgejo to restart after install
+            time.sleep(3)
+            wait_for_forgejo(args.url)
+
+    # Get admin token
     token = args.token
     if not token:
-        create_admin_user(args.url, args.admin_user, args.admin_pass, args.admin_email)
         token = get_or_create_token(args.url, args.admin_user, args.admin_pass)
 
     if not token:
-        print("\nPlease create the admin user via web UI, then run:")
-        print(f"  python src/forgejo/setup.py --token YOUR_TOKEN")
+        print("ERROR: Could not get admin token")
         sys.exit(1)
 
     # Create organization
@@ -330,26 +539,28 @@ def main():
         print("Failed to create organization")
         sys.exit(1)
 
+    # Discover or use provided agents
+    agents = args.agents if args.agents is not None else discover_agents()
+    if not agents:
+        print("No agents specified or found in .data/agents/")
+
     # Create agent users
     agent_tokens = {}
-    for agent in args.agents:
+    for agent in agents:
         result = create_agent_user(args.url, token, agent, args.agent_pass, args.org)
         if result.get("token"):
             agent_tokens[agent] = result["token"]
+            # Save to agent config (use container URL, not host URL)
+            save_agent_forgejo_config(agent, AGENT_FORGEJO_URL, result["token"])
 
     # Create default repos (per Constitution)
     for repo_config in DEFAULT_REPOS:
         if create_repo(args.url, token, args.org, repo_config["name"], repo_config["description"]):
             protect_branch(args.url, token, args.org, repo_config["name"])
 
-    # Create additional repo if requested
-    if args.create_repo:
-        if create_repo(args.url, token, args.org, args.create_repo, "Agent workspace repository"):
-            protect_branch(args.url, token, args.org, args.create_repo)
-
     # Output summary
     print("\n" + "=" * 50)
-    print("SETUP COMPLETE")
+    print("FORGEJO SETUP COMPLETE")
     print("=" * 50)
     print(f"\nForgejo URL: {args.url}")
     print(f"Organization: {args.org}")
@@ -358,12 +569,13 @@ def main():
     print(f"  Password: {args.admin_pass}")
 
     if agent_tokens:
-        print(f"\nAgent tokens (add to agent config):")
-        for agent, tok in agent_tokens.items():
-            print(f"  {agent}: {tok}")
+        print(f"\nAgent accounts created:")
+        for agent in agent_tokens:
+            print(f"  {agent} (token saved to config)")
 
-    print(f"\nTo create a new repo for agents:")
-    print(f"  python src/forgejo/setup.py --token TOKEN --create-repo my-repo")
+    print(f"\nRepositories:")
+    for repo in DEFAULT_REPOS:
+        print(f"  {args.org}/{repo['name']}")
 
 
 if __name__ == "__main__":

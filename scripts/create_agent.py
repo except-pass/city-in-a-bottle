@@ -374,7 +374,7 @@ Examples:
     parser.add_argument("--tick-interval", type=int, default=DEFAULT_TICK_INTERVAL, help=f"Seconds between runs (default: {DEFAULT_TICK_INTERVAL})")
     parser.add_argument("--max-turns", type=int, default=DEFAULT_MAX_TURNS, help=f"Max turns per run (default: {DEFAULT_MAX_TURNS})")
     parser.add_argument("--personality", help="Brief personality description for agent.md")
-    parser.add_argument("--agents-dir", type=Path, default=Path(__file__).parent.parent / "agents", help="Agents directory")
+    parser.add_argument("--agents-dir", type=Path, default=Path(__file__).parent.parent / ".data" / "agents", help="Agents directory")
     parser.add_argument("--skip-zulip", action="store_true", help="Skip Zulip bot creation")
     parser.add_argument("--skip-forgejo", action="store_true", help="Skip Forgejo user creation")
     parser.add_argument("--skip-db", action="store_true", help="Skip database entry")

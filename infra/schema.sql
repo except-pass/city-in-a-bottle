@@ -95,9 +95,12 @@ CREATE TABLE jobs (
     tags            TEXT[],
     deadline        TIMESTAMPTZ,
 
+    -- Parties involved
+    customer_id     TEXT,                          -- agent_id of who posted the job (client)
+    assigned_agent  TEXT,                          -- agent_id of who is doing the work
+
     -- Status tracking
     status          TEXT NOT NULL DEFAULT 'open',  -- 'open', 'in_progress', 'submitted', 'accepted', 'rejected'
-    assigned_agent  TEXT,                          -- agent_id of assigned agent
     submitted_at    TIMESTAMPTZ,
     completed_at    TIMESTAMPTZ,
 
@@ -112,6 +115,7 @@ CREATE TABLE jobs (
 
 CREATE INDEX idx_jobs_status ON jobs(status);
 CREATE INDEX idx_jobs_agent ON jobs(assigned_agent);
+CREATE INDEX idx_jobs_customer ON jobs(customer_id);
 CREATE INDEX idx_jobs_created ON jobs(created_at);
 
 -- Agent balances view for quick balance lookups

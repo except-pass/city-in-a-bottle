@@ -60,6 +60,8 @@ Use these to:
 
 # Global Zulip client (initialized on first use)
 _zulip_client: zulip.Client | None = None
+# Cache for username -> email mapping
+_user_email_cache: dict[str, str] | None = None
 
 
 def get_zulip_client() -> zulip.Client:
@@ -84,6 +86,47 @@ async def get_pg_connection() -> asyncpg.Connection:
     """Create a PostgreSQL connection."""
     dsn = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
     return await asyncpg.connect(dsn)
+
+
+def resolve_username_to_email(username: str) -> str | None:
+    """
+    Resolve a username to their Zulip email address.
+
+    Handles multiple username formats:
+    - Full email addresses are returned as-is
+    - Usernames are looked up via the Zulip API
+
+    Returns None if user not found.
+    """
+    global _user_email_cache
+
+    # If it's already an email, return as-is
+    if "@" in username:
+        return username
+
+    # Build cache if needed
+    if _user_email_cache is None:
+        client = get_zulip_client()
+        result = client.get_members()
+        if result.get("result") == "success":
+            _user_email_cache = {}
+            for member in result.get("members", []):
+                email = member.get("email", "")
+                # Index by multiple keys for flexible lookup:
+                # - Full email
+                # - Username part (before @)
+                # - For bots: also index without -bot suffix
+                _user_email_cache[email.lower()] = email
+                local_part = email.split("@")[0].lower()
+                _user_email_cache[local_part] = email
+                # If it's a bot email ending in -bot, also index without suffix
+                if local_part.endswith("-bot"):
+                    _user_email_cache[local_part[:-4]] = email
+        else:
+            _user_email_cache = {}
+
+    # Look up username (case-insensitive)
+    return _user_email_cache.get(username.lower())
 
 
 # =============================================================================
@@ -282,14 +325,24 @@ def send_dm(
     try:
         client = get_zulip_client()
 
-        # Convert usernames to email format if needed
+        # Resolve usernames to email addresses
         to = []
+        not_found = []
         for r in recipients:
-            if "@" not in r:
-                # Assume bot email format
-                to.append(f"{r}-bot@agent-economy.zulip.localhost")
+            email = resolve_username_to_email(r)
+            if email:
+                to.append(email)
             else:
-                to.append(r)
+                not_found.append(r)
+
+        if not_found:
+            return json.dumps({
+                "error": f"User(s) not found: {', '.join(not_found)}",
+                "hint": "Use list_users() to see available usernames",
+            })
+
+        if not to:
+            return json.dumps({"error": "No valid recipients"})
 
         result = client.send_message({
             "type": "private",
@@ -748,7 +801,13 @@ def get_user_info(username: str) -> str:
     try:
         client = get_zulip_client()
 
-        email = username if "@" in username else f"{username}-bot@agent-economy.zulip.localhost"
+        # Resolve username to email
+        email = resolve_username_to_email(username)
+        if not email:
+            return json.dumps({
+                "error": f"User '{username}' not found",
+                "hint": "Use list_users() to see available usernames",
+            })
 
         result = client.get_user_by_email(email)
 

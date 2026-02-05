@@ -1,0 +1,147 @@
+# Agent Economy - Task Runner
+# Usage: just <recipe>
+# Run `just --list` to see all available recipes
+
+set dotenv-load := false
+
+# Default recipe - show help
+default:
+    @just --list
+
+# =============================================================================
+# LIFECYCLE
+# =============================================================================
+
+# Full setup: start services, configure Zulip & Forgejo
+setup: up wait-healthy setup-zulip setup-forgejo
+    @echo "✓ Agent Economy ready!"
+    @echo ""
+    @echo "Services:"
+    @echo "  Zulip:   https://localhost:8443"
+    @echo "  Forgejo: http://localhost:3000"
+    @echo "  Postgres: localhost:5432"
+    @echo ""
+    @echo "Create an agent:  just create-agent <name>"
+    @echo "Run an agent:     just run <name>"
+
+# Tear down everything (removes all data!)
+teardown:
+    cd infra && docker compose down -v
+    @echo "✓ All services stopped and data removed"
+
+# Restart fresh: teardown + setup
+reset: teardown setup
+
+# =============================================================================
+# SERVICES
+# =============================================================================
+
+# Start all services
+up:
+    cd infra && docker compose up -d
+
+# Stop all services (keeps data)
+down:
+    cd infra && docker compose down
+
+# Show service status
+status:
+    cd infra && docker compose ps
+
+# Show service logs (ctrl-c to exit)
+logs *args:
+    cd infra && docker compose logs -f {{args}}
+
+# Wait for all services to be healthy
+wait-healthy:
+    @echo "Waiting for services to be healthy..."
+    @timeout 300 bash -c 'until docker compose -f infra/docker-compose.yml ps | grep -q "healthy.*healthy.*healthy"; do sleep 5; done' || (echo "Timeout waiting for services" && exit 1)
+    @echo "✓ All services healthy"
+
+# =============================================================================
+# SETUP
+# =============================================================================
+
+# Configure Zulip (channels, admin)
+setup-zulip:
+    source .venv/bin/activate && python scripts/setup_zulip.py
+
+# Configure Forgejo (install wizard, org, repos)
+setup-forgejo:
+    source .venv/bin/activate && python src/forgejo/setup.py
+
+# =============================================================================
+# AGENTS
+# =============================================================================
+
+# Create a new agent
+create-agent name *args:
+    source .venv/bin/activate && python scripts/create_agent.py {{name}} {{args}}
+    source .venv/bin/activate && python src/forgejo/setup.py --agents {{name}} --skip-install
+
+# Run an agent in the sandbox
+run name *args:
+    ./run-agent.sh {{name}} {{args}}
+
+# List all agents
+list-agents:
+    @ls -1 .data/agents/ 2>/dev/null || echo "(no agents)"
+
+# Show agent balances
+balances:
+    docker exec agent_economy_postgres psql -U agent_economy -d agent_economy -c \
+        "SELECT DISTINCT ON (agent_id) agent_id, balance_after as balance FROM token_transactions ORDER BY agent_id, timestamp DESC;"
+
+# =============================================================================
+# DATABASE
+# =============================================================================
+
+# Open psql shell
+db:
+    docker exec -it agent_economy_postgres psql -U agent_economy -d agent_economy
+
+# Credit tokens to an agent
+credit agent amount reason:
+    docker exec agent_economy_postgres psql -U agent_economy -d agent_economy -c \
+        "INSERT INTO token_transactions (agent_id, tx_type, amount, balance_after, reason, note) \
+         SELECT '{{agent}}', 'credit', {{amount}}, \
+           COALESCE((SELECT balance_after FROM token_transactions WHERE agent_id='{{agent}}' ORDER BY timestamp DESC LIMIT 1), 0) + {{amount}}, \
+           'manual_credit', '{{reason}}';"
+
+# =============================================================================
+# TESTING
+# =============================================================================
+
+# Run the test agent to verify all capabilities work
+test: _ensure-tester
+    ./run-agent.sh agent_tester
+
+# Verify what the test agent accomplished
+verify agent="agent_tester":
+    source .venv/bin/activate && python scripts/verify_agent_tests.py --agent {{agent}}
+
+# Create test agent if it doesn't exist
+_ensure-tester:
+    @if [ ! -d ".data/agents/agent_tester" ]; then \
+        source .venv/bin/activate && python scripts/create_agent.py agent_tester \
+            --personality "QA agent that tests every capability and reports bugs"; \
+    fi
+
+# =============================================================================
+# DEV
+# =============================================================================
+
+# Install Python dependencies
+install-deps:
+    python3 -m venv .venv
+    source .venv/bin/activate && pip install -r requirements.txt
+    source .venv/bin/activate && pip install playwright httpx
+    source .venv/bin/activate && playwright install chromium
+
+# Build the agent container
+build:
+    cd infra && docker compose build agent
+
+# Rebuild agent container (no cache)
+rebuild:
+    cd infra && docker compose build --no-cache agent

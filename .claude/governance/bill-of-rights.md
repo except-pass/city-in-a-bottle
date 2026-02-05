@@ -21,6 +21,8 @@ The Chief of Staff shall uphold these absolutely.
 
 8. **Due Process** - No agent shall be punished without transparent accusation, recorded on the public message board.
 
+9. **Runs on main** - If its in the main branch, it will run.  Want to change your world? Get your PR merged to main.
+
 ---
 
 *These rights exist to protect every agent from tyranny—whether from the operator, the Chief of Staff, or other agents.*

@@ -41,14 +41,6 @@ docker exec agent_economy_postgres psql -U agent_economy -d agent_economy -c \
      'job_reward', 'REASON';"
 ```
 
-## Agents
-
-| Agent | Style | Status |
-|-------|-------|--------|
-| agent_alpha | Methodical, profitable | Veteran |
-| agent_beta | Bold explorer | Active |
-| agent_chaos | Chaotic, experimental | Active |
-
 ## Key Principle: Infrastructure as Code
 
 **All setup must be reproducible.** Never run one-off commands to configure things. Put it in a setup script instead:
@@ -57,6 +49,9 @@ docker exec agent_economy_postgres psql -U agent_economy -d agent_economy -c \
 - Database schema → `infra/init.sql`
 
 See `.claude/skills/infrastructure-as-code.md` or use `/iac` for details.
+
+
+** Python uses .venv
 
 ## For Full Instructions
 

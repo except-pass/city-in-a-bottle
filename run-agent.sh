@@ -24,16 +24,19 @@ if [ -z "$1" ]; then
     echo "  $0 agent_alpha --max-turns 5"
     echo ""
     echo "Available agents:"
-    ls -1 "$SCRIPT_DIR/agents/" 2>/dev/null | grep -v "^_" || echo "  (none found)"
+    ls -1 "$SCRIPT_DIR/.data/agents/" 2>/dev/null | grep -v "^_" || echo "  (none found)"
     exit 1
 fi
 
 AGENT_NAME="$1"
 shift
 
+# Agent data lives in .data/agents/ (gitignored, separate from repo code)
+AGENTS_DIR="$SCRIPT_DIR/.data/agents"
+
 # Check agent exists
-if [ ! -d "$SCRIPT_DIR/agents/$AGENT_NAME" ]; then
-    echo "Error: Agent '$AGENT_NAME' not found in agents/"
+if [ ! -d "$AGENTS_DIR/$AGENT_NAME" ]; then
+    echo "Error: Agent '$AGENT_NAME' not found in .data/agents/"
     echo ""
     echo "Create it with:"
     echo "  python scripts/create_agent.py $AGENT_NAME"
