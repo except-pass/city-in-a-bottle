@@ -142,11 +142,16 @@ test: _ensure-tester
 verify agent="agent_tester":
     source .venv/bin/activate && python scripts/verify_agent_tests.py --agent {{agent}}
 
-# Create test agent if it doesn't exist
+# Create test agent from template if it doesn't exist
 _ensure-tester:
     @if [ ! -d ".data/agents/agent_tester" ]; then \
-        source .venv/bin/activate && python scripts/create_agent.py agent_tester \
-            --personality "QA agent that tests every capability and reports bugs"; \
+        echo "Installing agent_tester from template..."; \
+        mkdir -p .data/agents/agent_tester/memories .data/agents/agent_tester/skills; \
+        cp agents/agent_tester/agent.md .data/agents/agent_tester/; \
+        cp agents/agent_tester/config.json .data/agents/agent_tester/; \
+        source .venv/bin/activate && python scripts/setup_zulip.py --agents agent_tester; \
+        source .venv/bin/activate && python src/forgejo/setup.py --agents agent_tester --skip-install; \
+        echo "✓ agent_tester installed"; \
     fi
 
 # =============================================================================

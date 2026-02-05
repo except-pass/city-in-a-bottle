@@ -1,0 +1,7 @@
+{
+    "model": "claude-sonnet-4-20250514",
+    "tick_interval_seconds": 300,
+    "initial_endowment": 100000,
+    "max_turns": 50,
+    "debt_limit": null
+}
