@@ -31,6 +31,14 @@ from .tools import AgentTools, get_tool_definitions, get_agent_tools
 from ..board.client import BoardClient, MessageType
 from ..ledger.client import LedgerClient
 
+# Event logging for replay visualizations
+try:
+    from ..events.logger import EventLogger
+    EVENT_LOGGING_ENABLED = True
+except ImportError:
+    EVENT_LOGGING_ENABLED = False
+    EventLogger = None
+
 # Optional Zulip support
 try:
     import zulip
@@ -340,6 +348,17 @@ class AgentRunner:
             core_memory="",
         )
 
+        # Get epoch number from environment (set by run-agent.sh or run_epoch.py)
+        epoch_number = int(os.environ.get("EPOCH_NUMBER", "0")) or None
+
+        # Initialize event logger for replay visualizations
+        event_logger = None
+        if EVENT_LOGGING_ENABLED:
+            try:
+                event_logger = EventLogger()
+            except Exception as e:
+                print(f"Warning: Could not initialize event logger: {e}")
+
         # Initialize clients
         board = None
         if self.message_bus == "nats":
@@ -358,6 +377,15 @@ class AgentRunner:
             personality = self._load_personality(agent_id)
             ctx.core_memory = self._load_core_memory(agent_id)
             ctx.balance_before = await ledger.get_balance(agent_id)
+
+            # Log agent start for replay visualizations
+            if event_logger:
+                event_logger.log_agent_start(
+                    agent_id=agent_id,
+                    run_id=str(ctx.run_id),
+                    epoch_number=epoch_number,
+                    balance=ctx.balance_before,
+                )
 
             # Agent's own directory is the working directory
             agent_dir = self.agents_base_dir / agent_id
@@ -502,11 +530,21 @@ class AgentRunner:
                             assistant_texts.append(block.text)
                         elif isinstance(block, ToolUseBlock):
                             # Record tool usage as action
+                            tool_input = block.input if hasattr(block, 'input') else {}
                             ctx.actions.append({
                                 "type": "tool_use",
                                 "tool": block.name,
-                                "input": block.input if hasattr(block, 'input') else {},
+                                "input": tool_input,
                             })
+                            # Log for replay visualizations
+                            if event_logger:
+                                event_logger.log_tool_call(
+                                    agent_id=agent_id,
+                                    tool_name=block.name,
+                                    input_data=tool_input,
+                                    run_id=str(ctx.run_id),
+                                    epoch_number=epoch_number,
+                                )
 
                 elif isinstance(message, ResultMessage):
                     result_message = message
@@ -536,6 +574,17 @@ class AgentRunner:
             # Get final balance
             final_balance = await ledger.get_balance(agent_id)
 
+            # Log agent end for replay visualizations
+            if event_logger:
+                event_logger.log_agent_end(
+                    agent_id=agent_id,
+                    run_id=str(ctx.run_id),
+                    epoch_number=epoch_number,
+                    balance=final_balance,
+                    status="completed",
+                    tokens_spent=ctx.tokens_out,
+                )
+
             return {
                 "run_id": str(ctx.run_id),
                 "agent_id": agent_id,
@@ -551,11 +600,23 @@ class AgentRunner:
             }
 
         except Exception as e:
+            # Log agent end with error for replay visualizations
+            if event_logger:
+                event_logger.log_agent_end(
+                    agent_id=agent_id,
+                    run_id=str(ctx.run_id),
+                    epoch_number=epoch_number,
+                    balance=ctx.balance_before,  # May not have updated
+                    status="error",
+                    tokens_spent=ctx.tokens_out,
+                )
             # Record failed run
             await self._record_run(ctx, status="error", error_message=str(e))
             raise
 
         finally:
+            if event_logger:
+                event_logger.close()
             if board:
                 await board.close()
             await ledger.close()
