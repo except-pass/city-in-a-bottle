@@ -55,7 +55,7 @@ logs *args:
 # Wait for all services to be healthy
 wait-healthy:
     @echo "Waiting for services to be healthy..."
-    @timeout 300 bash -c 'until docker compose -f infra/docker-compose.yml ps | grep -q "healthy.*healthy.*healthy"; do sleep 5; done' || (echo "Timeout waiting for services" && exit 1)
+    @timeout 300 bash -c 'until [ "$(docker compose -f infra/docker-compose.yml ps | grep -c healthy)" -ge 3 ]; do sleep 5; done' || (echo "Timeout waiting for services" && exit 1)
     @echo "✓ All services healthy"
 
 # =============================================================================
