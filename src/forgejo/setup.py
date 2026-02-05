@@ -38,6 +38,7 @@ DEFAULT_AGENT_PASS = "agent_dev_123"
 # Default repositories to create (per Constitution Article 2)
 DEFAULT_REPOS = [
     {"name": "agent-contributions", "description": "Shared agent work - PRs welcome"},
+    {"name": "agent-economy", "description": "Infrastructure repo - agents can submit PRs to improve the system"},
 ]
 
 # Agents directory
@@ -405,6 +406,7 @@ def create_repo(
     org_name: str,
     repo_name: str,
     description: str = "",
+    auto_init: bool = True,
 ) -> bool:
     """Create a repository in the organization."""
     print(f"Creating repository: {org_name}/{repo_name}")
@@ -427,7 +429,7 @@ def create_repo(
             "name": repo_name,
             "description": description,
             "private": False,
-            "auto_init": True,
+            "auto_init": auto_init,
             "default_branch": "main",
         },
         token=token,
@@ -497,6 +499,83 @@ def discover_agents() -> list[str]:
     return sorted(agents)
 
 
+def push_repo_to_forgejo(
+    base_url: str,
+    token: str,
+    org: str,
+    repo_name: str = "agent-economy",
+) -> bool:
+    """Push the local repo to Forgejo so agents can submit PRs.
+
+    Sets up Forgejo as a git remote and pushes current branch.
+    Idempotent - safe to run multiple times.
+    """
+    import subprocess
+
+    repo_dir = Path(__file__).parent.parent.parent  # agent_economy root
+    remote_name = "forgejo"
+    remote_url = f"{base_url}/{org}/{repo_name}.git"
+
+    print(f"Pushing repo to Forgejo: {org}/{repo_name}")
+
+    # Check if remote already exists
+    result = subprocess.run(
+        ["git", "remote", "get-url", remote_name],
+        capture_output=True, text=True, cwd=repo_dir
+    )
+
+    if result.returncode == 0:
+        # Remote exists, check if URL matches
+        current_url = result.stdout.strip()
+        if current_url != remote_url:
+            print(f"  Updating remote URL...")
+            subprocess.run(
+                ["git", "remote", "set-url", remote_name, remote_url],
+                cwd=repo_dir
+            )
+    else:
+        # Add remote
+        print(f"  Adding remote '{remote_name}'...")
+        subprocess.run(
+            ["git", "remote", "add", remote_name, remote_url],
+            cwd=repo_dir
+        )
+
+    # Get current branch
+    result = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        capture_output=True, text=True, cwd=repo_dir
+    )
+    current_branch = result.stdout.strip()
+
+    # Push to Forgejo (force to handle initial empty repo with different history)
+    print(f"  Pushing {current_branch} to {remote_name}...")
+
+    # Use token auth in URL for push
+    auth_url = f"http://operator:{token}@localhost:3000/{org}/{repo_name}.git"
+
+    result = subprocess.run(
+        ["git", "push", "--force", auth_url, f"{current_branch}:main"],
+        capture_output=True, text=True, cwd=repo_dir
+    )
+
+    if result.returncode == 0:
+        print(f"  Successfully pushed to Forgejo")
+        return True
+    else:
+        print(f"  Push failed: {result.stderr}")
+        # Try without force
+        result = subprocess.run(
+            ["git", "push", auth_url, f"{current_branch}:main"],
+            capture_output=True, text=True, cwd=repo_dir
+        )
+        if result.returncode == 0:
+            print(f"  Successfully pushed to Forgejo")
+            return True
+        print(f"  Push still failed: {result.stderr}")
+        return False
+
+
 def main():
     parser = argparse.ArgumentParser(description="Set up Forgejo for Agent Economy")
     parser.add_argument("--url", default=DEFAULT_URL, help="Forgejo URL")
@@ -555,8 +634,14 @@ def main():
 
     # Create default repos (per Constitution)
     for repo_config in DEFAULT_REPOS:
-        if create_repo(args.url, token, args.org, repo_config["name"], repo_config["description"]):
-            protect_branch(args.url, token, args.org, repo_config["name"])
+        repo_name = repo_config["name"]
+        # agent-economy is special: we push our code to it, so no auto_init
+        is_infra_repo = repo_name == "agent-economy"
+        if create_repo(args.url, token, args.org, repo_name, repo_config["description"], auto_init=not is_infra_repo):
+            if is_infra_repo:
+                # Push code BEFORE protecting (protection blocks force push)
+                push_repo_to_forgejo(args.url, token, args.org, repo_name)
+            protect_branch(args.url, token, args.org, repo_name)
 
     # Output summary
     print("\n" + "=" * 50)

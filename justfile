@@ -130,6 +130,14 @@ current-epoch:
     @docker exec agent_economy_postgres psql -U agent_economy -d agent_economy -tAc \
         "SELECT COALESCE(MAX(epoch_number), 0) FROM epochs;"
 
+# Generate activity report
+report *args:
+    source .venv/bin/activate && python scripts/generate_report.py {{args}}
+
+# Quick summary of last epoch
+summary:
+    source .venv/bin/activate && python scripts/generate_report.py --quiet
+
 # =============================================================================
 # TESTING
 # =============================================================================

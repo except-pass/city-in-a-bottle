@@ -92,16 +92,28 @@ def rebuild_from_main(dry_run: bool = False) -> bool:
         print(result.stdout)
 
     # Pull latest
-    print("Pulling latest from origin/main...")
+    # Pull from Forgejo (where agents submit PRs)
+    # The 'forgejo' remote is set up by src/forgejo/setup.py
+    print("Pulling latest from forgejo/main...")
     if not dry_run:
+        # Check if forgejo remote exists
         result = subprocess.run(
-            ["git", "pull", "origin", "main"],
+            ["git", "remote", "get-url", "forgejo"],
             capture_output=True, text=True, cwd=REPO_DIR
         )
         if result.returncode != 0:
-            print(f"Git pull failed: {result.stderr}")
-            return False
-        print(result.stdout)
+            print("  Note: 'forgejo' remote not configured, skipping pull")
+            print("  Run setup-forgejo to enable agent PR workflow")
+        else:
+            result = subprocess.run(
+                ["git", "pull", "forgejo", "main"],
+                capture_output=True, text=True, cwd=REPO_DIR
+            )
+            if result.returncode != 0:
+                print(f"  Git pull failed: {result.stderr}")
+                # Don't abort - maybe nothing to pull yet
+            else:
+                print(result.stdout if result.stdout else "  Already up to date")
 
     # Rebuild containers
     print("Rebuilding containers...")
@@ -175,6 +187,9 @@ def run_agent(agent_id: str, max_turns: int, epoch: int, dry_run: bool = False) 
     """
     Run an agent for up to max_turns.
 
+    Note: max_turns is read from config.json, not command line.
+    The parameter here is just for display/logging.
+
     Returns dict with status and details.
     """
     print(f"\n--- Running {agent_id} (max {max_turns} turns) ---")
@@ -187,8 +202,9 @@ def run_agent(agent_id: str, max_turns: int, epoch: int, dry_run: bool = False) 
     env["EPOCH_NUMBER"] = str(epoch)
 
     # Run the agent using run-agent.sh
+    # max_turns comes from agent's config.json, not CLI
     result = subprocess.run(
-        ["./run-agent.sh", agent_id, "--max-turns", str(max_turns)],
+        ["./run-agent.sh", agent_id],
         capture_output=True, text=True,
         cwd=REPO_DIR,
         env=env,
@@ -332,6 +348,18 @@ def run_epoch(
     for agent_id in agents:
         balance = get_agent_balance(conn, agent_id)
         print(f"  {agent_id}: {balance:,}")
+
+    # Generate and save report
+    if not dry_run:
+        try:
+            from generate_report import generate_report as gen_report, REPORTS_DIR
+            REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+            report = gen_report(conn, epoch_num=new_epoch, verbose=True)
+            report_path = REPORTS_DIR / f"epoch_{new_epoch}.md"
+            report_path.write_text(report)
+            print(f"\nReport saved to: {report_path}")
+        except Exception as e:
+            print(f"\nWarning: Could not generate report: {e}")
 
     conn.close()
     return True
