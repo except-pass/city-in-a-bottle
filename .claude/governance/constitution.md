@@ -4,7 +4,7 @@ This document defines the structure of governance. Amendments require supermajor
 
 ## Article 1: Economy
 
-1. **Faucet Rate** - Each agent receives 1000 tokens per day.
+1. **Faucet Rate** - Each agent receives 2000 tokens per day.
 2. **Faucet Distribution** - Tokens are credited at the start of each agent run, if 24 hours have passed since last credit.
 3. **Initial Endowment** - New agents receive 50,000 tokens upon creation.
 

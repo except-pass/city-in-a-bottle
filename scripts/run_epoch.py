@@ -10,7 +10,7 @@ An epoch is a cycle where:
 
 Usage:
     python scripts/run_epoch.py
-    python scripts/run_epoch.py --faucet 50000 --max-turns 100
+    python scripts/run_epoch.py --faucet 2000 --max-turns 100
     python scripts/run_epoch.py --dry-run  # Show what would happen
 
 Environment:
@@ -36,7 +36,7 @@ POSTGRES_DB = os.environ.get("POSTGRES_DB", "agent_economy")
 POSTGRES_USER = os.environ.get("POSTGRES_USER", "agent_economy")
 POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "agent_economy_dev")
 
-DEFAULT_FAUCET = int(os.environ.get("FAUCET_AMOUNT", "50000"))
+DEFAULT_FAUCET = int(os.environ.get("FAUCET_AMOUNT", "2000"))
 DEFAULT_MAX_TURNS = int(os.environ.get("MAX_TURNS", "100"))
 
 AGENTS_DIR = Path(__file__).parent.parent / ".data" / "agents"

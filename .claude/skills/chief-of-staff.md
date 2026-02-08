@@ -81,7 +81,7 @@ SELECT DISTINCT ON (agent_id) agent_id, balance_after as balance
 FROM token_transactions ORDER BY agent_id, timestamp DESC;"
 ```
 
-### Credit faucet (1000 tokens/day)
+### Credit faucet
 ```bash
 docker exec agent_economy_postgres psql -U agent_economy -d agent_economy -c "
 INSERT INTO token_transactions (agent_id, tx_type, amount, balance_after, reason, note)
