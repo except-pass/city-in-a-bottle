@@ -37,10 +37,15 @@ POSTGRES_USER = os.environ.get("POSTGRES_USER", "agent_economy")
 POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "agent_economy_dev")
 
 DEFAULT_FAUCET = int(os.environ.get("FAUCET_AMOUNT", "2000"))
-DEFAULT_MAX_TURNS = int(os.environ.get("MAX_TURNS", "100"))
+DEFAULT_MAX_TURNS = int(os.environ.get("MAX_TURNS", "25"))
 
 AGENTS_DIR = Path(__file__).parent.parent / ".data" / "agents"
 REPO_DIR = Path(__file__).parent.parent
+
+# Forgejo config (for authenticated pull)
+FORGEJO_URL = os.environ.get("FORGEJO_URL", "http://localhost:3000")
+FORGEJO_ORG = os.environ.get("FORGEJO_ORG", "workspace")
+FORGEJO_REPO = os.environ.get("FORGEJO_REPO", "agent-economy")
 
 
 def get_db_connection():
@@ -74,6 +79,32 @@ def get_git_commit() -> str:
         return "unknown"
 
 
+def get_forgejo_token() -> str | None:
+    """Get operator Forgejo token from env or .claude/settings.local.json."""
+    # Check environment first
+    token = os.environ.get("FORGEJO_TOKEN")
+    if token:
+        return token
+
+    # Fall back to .claude/settings.local.json
+    settings_path = REPO_DIR / ".claude" / "settings.local.json"
+    if settings_path.exists():
+        try:
+            settings = json.loads(settings_path.read_text())
+            token = (
+                settings.get("mcpServers", {})
+                .get("forgejo", {})
+                .get("env", {})
+                .get("FORGEJO_TOKEN")
+            )
+            if token:
+                return token
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    return None
+
+
 def rebuild_from_main(dry_run: bool = False) -> bool:
     """
     Rebuild from main branch.
@@ -91,22 +122,19 @@ def rebuild_from_main(dry_run: bool = False) -> bool:
         print("WARNING: Uncommitted changes in repo")
         print(result.stdout)
 
-    # Pull latest
-    # Pull from Forgejo (where agents submit PRs)
-    # The 'forgejo' remote is set up by src/forgejo/setup.py
+    # Pull latest from Forgejo (where agents submit PRs)
+    # Uses authenticated URL so token stays in memory, never in .git/config
     print("Pulling latest from forgejo/main...")
     if not dry_run:
-        # Check if forgejo remote exists
-        result = subprocess.run(
-            ["git", "remote", "get-url", "forgejo"],
-            capture_output=True, text=True, cwd=REPO_DIR
-        )
-        if result.returncode != 0:
-            print("  Note: 'forgejo' remote not configured, skipping pull")
-            print("  Run setup-forgejo to enable agent PR workflow")
+        token = get_forgejo_token()
+        if not token:
+            print("  Note: No Forgejo token found, skipping pull")
+            print("  Set FORGEJO_TOKEN env var or run setup-forgejo")
         else:
+            # Use token-authenticated URL directly (same pattern as push_repo_to_forgejo)
+            auth_url = f"http://operator:{token}@localhost:3000/{FORGEJO_ORG}/{FORGEJO_REPO}.git"
             result = subprocess.run(
-                ["git", "pull", "forgejo", "main"],
+                ["git", "pull", auth_url, "main"],
                 capture_output=True, text=True, cwd=REPO_DIR
             )
             if result.returncode != 0:
@@ -119,7 +147,7 @@ def rebuild_from_main(dry_run: bool = False) -> bool:
     print("Rebuilding containers...")
     if not dry_run:
         result = subprocess.run(
-            ["docker", "compose", "build"],
+            ["docker", "compose", "--profile", "agent", "build"],
             capture_output=True, text=True,
             cwd=REPO_DIR / "infra"
         )

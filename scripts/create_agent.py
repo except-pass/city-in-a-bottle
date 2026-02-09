@@ -44,6 +44,8 @@ ZULIP_ADMIN_PASSWORD = "admin-dev-password-123"
 
 # Forgejo config
 FORGEJO_URL = os.environ.get("FORGEJO_URL", "http://localhost:3000")
+# Container-facing URL for agent configs (Docker DNS, not localhost)
+AGENT_FORGEJO_URL = os.environ.get("AGENT_FORGEJO_URL", "http://forgejo:3000")
 FORGEJO_CONTAINER = "agent_economy_forgejo"
 
 # Postgres config
@@ -350,7 +352,7 @@ def update_config_with_forgejo(agent_dir: Path, forgejo_info: dict) -> None:
     config_path = agent_dir / "config.json"
     config = json.loads(config_path.read_text())
     config["forgejo"] = {
-        "url": FORGEJO_URL,
+        "url": AGENT_FORGEJO_URL,
         "username": forgejo_info["username"],
         "token": forgejo_info["token"],
     }
