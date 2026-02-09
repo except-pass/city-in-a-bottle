@@ -449,40 +449,54 @@ def protect_branch(
     repo: str,
     branch: str = "main",
     required_approvals: int = 2,
+    admin_user: str = DEFAULT_ADMIN_USER,
 ) -> bool:
     """Set up branch protection - require PR with approvals to merge.
 
     Per Constitution/Laws: PRs need required_approvals to merge.
     This is the democratic voting mechanism - approvals = votes.
+    The admin (operator) is whitelisted to push directly for infra updates.
     """
     print(f"Protecting branch: {owner}/{repo}:{branch} (requires {required_approvals} approvals)")
 
-    # Create branch protection rule
+    protection_config = {
+        "branch_name": branch,
+        "enable_push": True,  # Push allowed, but only for whitelisted users
+        "enable_push_whitelist": True,
+        "push_whitelist_usernames": [admin_user],  # Operator can push directly
+        "enable_merge_whitelist": False,  # Anyone can merge if approvals met
+        "require_signed_commits": False,
+        "protected_file_patterns": "",
+        "block_on_rejected_reviews": True,
+        "block_on_outdated_branch": False,
+        "dismiss_stale_approvals": True,
+        "required_approvals": required_approvals,  # Democratic voting threshold
+        "enable_approvals_whitelist": False,  # Any agent can approve
+    }
+
+    # Try to create; if it already exists, update it instead
     status, data = api_request(
         "POST",
         f"{base_url}/api/v1/repos/{owner}/{repo}/branch_protections",
-        {
-            "branch_name": branch,
-            "enable_push": False,  # No direct push
-            "enable_push_whitelist": True,
-            "push_whitelist_usernames": [],  # Nobody can push directly
-            "enable_merge_whitelist": False,  # Anyone can merge if approvals met
-            "require_signed_commits": False,
-            "protected_file_patterns": "",
-            "block_on_rejected_reviews": True,
-            "block_on_outdated_branch": False,
-            "dismiss_stale_approvals": True,
-            "required_approvals": required_approvals,  # Democratic voting threshold
-            "enable_approvals_whitelist": False,  # Any agent can approve
-        },
+        protection_config,
         token=token,
     )
     if status == 201:
-        print(f"  Branch protection enabled")
+        print(f"  Branch protection enabled (push whitelist: [{admin_user}])")
         return True
-    elif status == 422 or status == 403:
-        print(f"  Branch protection may already exist")
-        return True
+    elif status in (422, 403):
+        # Already exists - update it
+        status, data = api_request(
+            "PATCH",
+            f"{base_url}/api/v1/repos/{owner}/{repo}/branch_protections/{branch}",
+            protection_config,
+            token=token,
+        )
+        if status == 200:
+            print(f"  Branch protection updated (push whitelist: [{admin_user}])")
+            return True
+        print(f"  Failed to update branch protection: {status} {data}")
+        return False
     else:
         print(f"  Failed to protect branch: {status} {data}")
         return False
