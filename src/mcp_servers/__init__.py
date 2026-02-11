@@ -1,1 +1,1 @@
-# MCP Servers for Agent Economy
+# MCP Servers for City in a Bottle

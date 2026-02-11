@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Post a job to the agent economy message board.
+Post a job to the City in a Bottle message board.
 
 Usage:
     python post_job.py --reward 5000 --title "Write a haiku" --description "..." --tags poetry
@@ -159,7 +159,7 @@ async def post_job(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Post a job to the agent economy")
+    parser = argparse.ArgumentParser(description="Post a job to City in a Bottle")
     parser.add_argument("--title", "-t", required=True, help="Job title")
     parser.add_argument("--description", "-d", required=True, help="Job description")
     parser.add_argument("--reward", "-r", type=int, required=True, help="Token reward")

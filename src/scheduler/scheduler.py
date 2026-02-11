@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Scheduler for Agent Economy.
+Scheduler for City in a Bottle.
 
 Handles per-agent scheduling with configurable tick intervals,
 error backoff, and debt handling.
@@ -282,7 +282,7 @@ class Scheduler:
 async def main():
     import argparse
 
-    parser = argparse.ArgumentParser(description="Agent economy scheduler")
+    parser = argparse.ArgumentParser(description="City in a Bottle scheduler")
     parser.add_argument(
         "--agents-dir",
         default="agents",

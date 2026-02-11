@@ -1,5 +1,5 @@
 #!/bin/bash
-# One-command startup for the agent economy stack
+# One-command startup for the City in a Bottle stack
 #
 # Usage: ./scripts/start.sh
 #
@@ -15,7 +15,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-echo "Starting agent economy stack..."
+echo "Starting City in a Bottle stack..."
 cd "$PROJECT_ROOT/infra"
 docker compose up -d
 
@@ -37,7 +37,7 @@ python scripts/setup_zulip.py --skip-wait
 
 echo ""
 echo "================================================"
-echo "Agent Economy is ready!"
+echo "City in a Bottle is ready!"
 echo ""
 echo "  Zulip UI:     https://localhost:8443"
 echo "  Zulip API:    http://localhost:8080"

@@ -2,7 +2,7 @@
 """
 Zulip Setup Script - Fully Automated
 
-Initializes Zulip for the agent economy with zero manual steps.
+Initializes Zulip for City in a Bottle with zero manual steps.
 Safe to run multiple times (idempotent) - will not recreate existing resources.
 
 How it works:
@@ -161,7 +161,7 @@ def create_admin_user(container: str) -> bool:
             container, "create_realm",
             "--string-id", "",  # Root domain
             "--password", ADMIN_PASSWORD,
-            "Agent Economy",
+            "City in a Bottle",
             ADMIN_EMAIL,
             "Admin"
         )
@@ -348,7 +348,7 @@ def setup_agents(base_url: str, admin_email: str, api_key: str, agents_dir: Path
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Set up Zulip for agent economy")
+    parser = argparse.ArgumentParser(description="Set up Zulip for City in a Bottle")
     parser.add_argument(
         "--zulip-url",
         default=os.environ.get("ZULIP_URL", "https://localhost:8443"),

@@ -1,5 +1,5 @@
 """
-Sandbox enforcement for Agent Economy.
+Sandbox enforcement for City in a Bottle.
 
 Validates file paths and restricts agent operations to their own directories.
 """

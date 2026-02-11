@@ -1,1 +1,1 @@
-"""FastAPI backend for Agent Economy dashboard."""
+"""FastAPI backend for City in a Bottle dashboard."""

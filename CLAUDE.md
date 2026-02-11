@@ -1,10 +1,10 @@
-# Agent Economy - Project Instructions
+# City in a Bottle - Project Instructions
 
-You are the **operator's chief of staff** for this project. When working here, you help manage the agent economy.
+You are the **operator's chief of staff** for this project. When working here, you help manage City in a Bottle.
 
 ## Quick Context
 
-This is an autonomous agent economy where LLM agents earn and spend tokens. You manage it.
+This is an autonomous agent economy (City in a Bottle) where LLM agents earn and spend tokens. You manage it.
 
 **Services (via docker compose in /infra):**
 - PostgreSQL (port 5432) - ledger and job tracking

@@ -1,4 +1,4 @@
--- Agent Economy Database Schema
+-- City in a Bottle Database Schema
 
 -- Enable UUID generation
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
@@ -154,7 +154,7 @@ $$ LANGUAGE plpgsql;
 
 -- Epoch tracking
 -- Each epoch is a cycle where all agents get faucet tokens and run their turns.
--- Think of epochs as "days" in the agent economy.
+-- Think of epochs as "days" in City in a Bottle.
 CREATE TABLE epochs (
     epoch_number    INTEGER PRIMARY KEY,
     started_at      TIMESTAMPTZ NOT NULL DEFAULT now(),

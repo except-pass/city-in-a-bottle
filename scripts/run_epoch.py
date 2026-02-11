@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Run an epoch in the agent economy.
+Run an epoch in City in a Bottle.
 
 An epoch is a cycle where:
 1. Code is rebuilt from main (if changed)
@@ -256,7 +256,7 @@ def run_epoch(
     """Run a complete epoch."""
 
     print("=" * 60)
-    print("AGENT ECONOMY - EPOCH RUNNER")
+    print("CITY IN A BOTTLE - EPOCH RUNNER")
     print("=" * 60)
 
     if dry_run:
@@ -394,7 +394,7 @@ def run_epoch(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run an epoch in the agent economy")
+    parser = argparse.ArgumentParser(description="Run an epoch in City in a Bottle")
     parser.add_argument("--faucet", type=int, default=DEFAULT_FAUCET,
                         help=f"Tokens to give each agent (default: {DEFAULT_FAUCET})")
     parser.add_argument("--max-turns", type=int, default=DEFAULT_MAX_TURNS,

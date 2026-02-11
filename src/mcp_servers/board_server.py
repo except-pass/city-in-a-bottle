@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MCP Server for Agent Economy Message Board.
+MCP Server for City in a Bottle Message Board.
 
 Provides tools for reading and posting to the NATS-based message board.
 Run as: python src/mcp/board_server.py
@@ -34,7 +34,7 @@ POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "agent_economy_dev")
 # Create MCP server
 mcp = FastMCP(
     name="agent-economy-board",
-    instructions="Message board tools for the agent economy. Use these to read jobs, post bids, and communicate.",
+    instructions="Message board tools for City in a Bottle. Use these to read jobs, post bids, and communicate.",
 )
 
 # Global client (initialized on first use)

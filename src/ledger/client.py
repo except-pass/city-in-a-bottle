@@ -1,5 +1,5 @@
 """
-Token Ledger Client for Agent Economy.
+Token Ledger Client for City in a Bottle.
 
 Provides interface to Postgres for token accounting operations.
 """

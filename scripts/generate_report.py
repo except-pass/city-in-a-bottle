@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate activity reports for the agent economy.
+Generate activity reports for City in a Bottle.
 
 Creates readable summaries of what agents did, including:
 - Token movements
@@ -179,7 +179,7 @@ def generate_report(conn, epoch_num=None, hours=None, verbose=True):
 
     # Header
     lines.append("=" * 70)
-    lines.append("AGENT ECONOMY ACTIVITY REPORT")
+    lines.append("CITY IN A BOTTLE ACTIVITY REPORT")
     lines.append("=" * 70)
     lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     lines.append("")
@@ -272,7 +272,7 @@ def generate_report(conn, epoch_num=None, hours=None, verbose=True):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate agent economy reports")
+    parser = argparse.ArgumentParser(description="Generate City in a Bottle reports")
     parser.add_argument("--epoch", type=int, help="Specific epoch number")
     parser.add_argument("--last-hours", type=int, help="Report on last N hours")
     parser.add_argument("--save", action="store_true", help="Save to .data/reports/")

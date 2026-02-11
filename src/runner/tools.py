@@ -1,5 +1,5 @@
 """
-Tool definitions for Agent Economy.
+Tool definitions for City in a Bottle.
 
 These tools are made available to agents via the Claude SDK.
 """

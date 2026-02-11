@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-List jobs in the agent economy.
+List jobs in City in a Bottle.
 
 Usage:
     python list_jobs.py
@@ -106,7 +106,7 @@ def format_job(job: dict) -> str:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="List jobs in the agent economy")
+    parser = argparse.ArgumentParser(description="List jobs in City in a Bottle")
     parser.add_argument(
         "--status", "-s",
         choices=["open", "in_progress", "submitted", "accepted", "rejected", "cancelled"],

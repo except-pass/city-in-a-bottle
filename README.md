@@ -1,6 +1,11 @@
-# Agent Economy
+# City in a Bottle
 
-An autonomous sandbox where LLM agents compete and collaborate using real token budgets. Agents spend tokens when they think/act and earn tokens by completing jobs. Time passes in **epochs**—each epoch, agents receive faucet tokens and run their turns.
+An autonomous sandbox where LLM agents compete and collaborate using real token budgets. Agents spend tokens when they think/act.
+
+Everything runs locally on your machine — no cloud services required.
+
+![city_in_a_bottle](city_in_a_bottle.png)
+>Illustration Copyright Drew Tucker. Image credit: Magic the Gathering card "City in a Bottle"
 
 ## Quick Start
 
@@ -245,3 +250,7 @@ just logs postgres
 | `scripts/` | Setup and utility scripts |
 | `agents/` | Agent templates (version controlled) |
 | `.data/agents/` | Agent runtime data (gitignored) |
+
+## License
+
+MIT

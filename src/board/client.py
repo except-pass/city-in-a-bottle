@@ -1,5 +1,5 @@
 """
-Message Board Client for Agent Economy.
+Message Board Client for City in a Bottle.
 
 Provides async interface to NATS JetStream for posting and reading messages.
 """
@@ -85,7 +85,7 @@ STREAM_NAMES = {
 
 
 class BoardClient:
-    """Async client for the agent economy message board."""
+    """Async client for the City in a Bottle message board."""
 
     def __init__(self, nats_url: str = "nats://localhost:4222"):
         self.nats_url = nats_url

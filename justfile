@@ -1,4 +1,4 @@
-# Agent Economy - Task Runner
+# City in a Bottle - Task Runner
 # Usage: just <recipe>
 # Run `just --list` to see all available recipes
 
@@ -14,7 +14,7 @@ default:
 
 # Full setup: start services, configure Zulip & Forgejo
 setup: up wait-healthy setup-zulip setup-forgejo
-    @echo "✓ Agent Economy ready!"
+    @echo "✓ City in a Bottle ready!"
     @echo ""
     @echo "Services:"
     @echo "  Zulip:   https://localhost:8443"

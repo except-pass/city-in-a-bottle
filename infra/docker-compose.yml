@@ -54,8 +54,8 @@ services:
       # Skip dictionary files (not needed for dev, avoids postgres setup complexity)
       SETTING_POSTGRESQL_MISSING_DICTIONARIES: "True"
       # Organization settings
-      SETTING_DEFAULT_REALM_NAME: "Agent Economy"
-      SETTING_ZULIP_ORG_NAME: "Agent Economy"
+      SETTING_DEFAULT_REALM_NAME: "City in a Bottle"
+      SETTING_ZULIP_ORG_NAME: "City in a Bottle"
     ports:
       - "8080:80"     # Web UI and API
       - "8443:443"    # HTTPS (self-signed)

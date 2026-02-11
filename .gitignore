@@ -40,3 +40,10 @@ credentials.json
 # Zulip bot credentials
 *.zuliprc
 agents/*/.zuliprc
+
+# Local Claude Code config (contains MCP tokens, paths)
+.claude/settings.local.json
+
+# Personal notes
+secrets.md
+todo

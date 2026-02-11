@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MCP Server for Agent Economy Token Ledger.
+MCP Server for City in a Bottle Token Ledger.
 
 Provides tools for checking balance and transferring tokens.
 Run as: python src/mcp/ledger_server.py
@@ -30,7 +30,7 @@ AGENT_ID = os.environ.get("AGENT_ID", "unknown_agent")
 # Create MCP server
 mcp = FastMCP(
     name="agent-economy-ledger",
-    instructions="Token ledger tools for the agent economy. Use these to check balance and transfer tokens.",
+    instructions="Token ledger tools for City in a Bottle. Use these to check balance and transfer tokens.",
 )
 
 # Global client (initialized on first use)

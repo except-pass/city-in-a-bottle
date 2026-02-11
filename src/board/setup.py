@@ -1,7 +1,7 @@
 """
 Setup script for NATS JetStream streams.
 
-Creates the required streams for the agent economy message board.
+Creates the required streams for City in a Bottle message board.
 """
 
 import asyncio
@@ -154,7 +154,7 @@ async def show_status(nats_url: str = "nats://localhost:4222") -> None:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Setup NATS JetStream streams for agent economy")
+    parser = argparse.ArgumentParser(description="Setup NATS JetStream streams for City in a Bottle")
     parser.add_argument(
         "command",
         choices=["setup", "delete", "status"],

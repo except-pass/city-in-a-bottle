@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Forgejo Setup for Agent Economy - Fully Automated.
+Forgejo Setup for City in a Bottle - Fully Automated.
 
 Creates:
 - Initial install (via Playwright if needed)
@@ -101,7 +101,7 @@ def run_install_wizard(base_url: str, admin_user: str, admin_pass: str, admin_em
             # General settings - Instance title (if visible)
             instance_title = page.locator('input[id="app_name"]')
             if instance_title.count() > 0 and instance_title.is_visible():
-                instance_title.fill("Agent Economy")
+                instance_title.fill("City in a Bottle")
 
             # Expand "Administrator account settings" section
             # Use JavaScript to expand all collapsed sections and make admin fields visible
@@ -294,7 +294,7 @@ def create_organization(base_url: str, token: str, org_name: str) -> bool:
     status, data = api_request(
         "POST",
         f"{base_url}/api/v1/orgs",
-        {"username": org_name, "full_name": "Agent Economy Workspace"},
+        {"username": org_name, "full_name": "City in a Bottle Workspace"},
         token=token,
     )
     if status == 201:
@@ -591,7 +591,7 @@ def push_repo_to_forgejo(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Set up Forgejo for Agent Economy")
+    parser = argparse.ArgumentParser(description="Set up Forgejo for City in a Bottle")
     parser.add_argument("--url", default=DEFAULT_URL, help="Forgejo URL")
     parser.add_argument("--admin-user", default=DEFAULT_ADMIN_USER, help="Admin username")
     parser.add_argument("--admin-pass", default=DEFAULT_ADMIN_PASS, help="Admin password")

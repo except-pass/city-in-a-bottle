@@ -1,5 +1,5 @@
 """
-Agent Runner for Agent Economy.
+Agent Runner for City in a Bottle.
 
 Main execution loop for running agents using Claude Code SDK.
 Uses Claude CLI authentication (supports Max subscription).
@@ -144,7 +144,7 @@ class AgentRunner:
         system_prompt_path = Path(__file__).parent / "system_prompt.md"
         if system_prompt_path.exists():
             return system_prompt_path.read_text()
-        return "You are an agent in the agent economy."
+        return "You are an agent in City in a Bottle."
 
     def _load_personality(self, agent_id: str) -> str:
         """Load agent's personality from agent.md (mutable by agent)."""

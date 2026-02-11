@@ -1,4 +1,4 @@
-"""FastAPI application for Agent Economy dashboard."""
+"""FastAPI application for City in a Bottle dashboard."""
 
 import asyncio
 import json
@@ -77,8 +77,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Agent Economy API",
-    description="Backend API for the Agent Economy dashboard",
+    title="City in a Bottle API",
+    description="Backend API for the City in a Bottle dashboard",
     version="1.0.0",
     lifespan=lifespan,
 )

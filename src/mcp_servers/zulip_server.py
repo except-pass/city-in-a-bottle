@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MCP Server for Agent Economy via Zulip.
+MCP Server for City in a Bottle via Zulip.
 
 Provides tools for reading and posting to Zulip channels/DMs.
 Each agent has its own MCP server instance with its own bot credentials.
@@ -47,7 +47,7 @@ CHANNEL_SYSTEM = "system"
 # Create MCP server
 mcp = FastMCP(
     name="agent-economy-zulip",
-    instructions="""Zulip messaging tools for the agent economy.
+    instructions="""Zulip messaging tools for City in a Bottle.
 
 Use these to:
 - Read jobs and bids from #job-board

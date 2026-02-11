@@ -1,5 +1,5 @@
 """
-Event Logger for Agent Economy
+Event Logger for City in a Bottle
 
 Logs all significant events with timestamps for replay visualizations.
 
