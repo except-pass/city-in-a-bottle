@@ -10,7 +10,7 @@
 # - Access to Forgejo (git)
 # - Access to PostgreSQL (ledger)
 # - Their own agent directory mounted for persistence
-# - Claude credentials mounted read-only
+# - Claude auth (OAuth from Max/Pro, API key, or legacy credentials)
 
 set -e
 
@@ -43,13 +43,64 @@ if [ ! -d "$AGENTS_DIR/$AGENT_NAME" ]; then
     exit 1
 fi
 
-# Check credentials
-if [ ! -f "$HOME/.claude/.credentials.json" ]; then
-    echo "Error: Claude credentials not found at ~/.claude/.credentials.json"
+# --- Claude Authentication ---
+# Priority: ANTHROPIC_API_KEY > ~/.anthropic/api_key > CLAUDE_CODE_OAUTH_TOKEN > keychain auto-extract
+if [ -n "$ANTHROPIC_API_KEY" ]; then
+    echo "Auth: using ANTHROPIC_API_KEY env var"
+elif [ -f "$HOME/.anthropic/api_key" ]; then
+    ANTHROPIC_API_KEY=$(cat "$HOME/.anthropic/api_key" | tr -d '[:space:]')
+    echo "Auth: using ~/.anthropic/api_key"
+elif [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+    echo "Auth: using provided CLAUDE_CODE_OAUTH_TOKEN"
+elif command -v security &>/dev/null; then
+    # macOS: extract OAuth credentials from keychain and refresh if needed
+    KEYCHAIN_DATA=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null || true)
+    if [ -n "$KEYCHAIN_DATA" ]; then
+        eval "$(echo "$KEYCHAIN_DATA" | python3 -c "
+import sys, json, time
+d = json.loads(sys.stdin.read()).get('claudeAiOauth', {})
+at = d.get('accessToken', '')
+rt = d.get('refreshToken', '')
+exp = d.get('expiresAt', 0)
+now_ms = int(time.time() * 1000)
+expired = 'true' if exp < now_ms else 'false'
+print(f'_ACCESS_TOKEN=\"{at}\"')
+print(f'_REFRESH_TOKEN=\"{rt}\"')
+print(f'_EXPIRED={expired}')
+" 2>/dev/null)"
+
+        if [ "$_EXPIRED" = "true" ] && [ -n "$_REFRESH_TOKEN" ]; then
+            echo "Auth: OAuth token expired, refreshing..."
+            REFRESH_RESPONSE=$(curl -s -X POST https://platform.claude.com/v1/oauth/token \
+                -H "Content-Type: application/json" \
+                -d "{\"grant_type\":\"refresh_token\",\"refresh_token\":\"$_REFRESH_TOKEN\",\"client_id\":\"9d1c250a-e61b-44d9-88ed-5944d1962f5e\"}" 2>/dev/null)
+
+            NEW_TOKEN=$(echo "$REFRESH_RESPONSE" | python3 -c "import sys,json; print(json.loads(sys.stdin.read()).get('access_token',''))" 2>/dev/null)
+            if [ -n "$NEW_TOKEN" ]; then
+                CLAUDE_CODE_OAUTH_TOKEN="$NEW_TOKEN"
+                echo "Auth: token refreshed successfully"
+            else
+                echo "Auth: OAuth refresh failed, falling back..."
+            fi
+        elif [ -n "$_ACCESS_TOKEN" ]; then
+            CLAUDE_CODE_OAUTH_TOKEN="$_ACCESS_TOKEN"
+            echo "Auth: using OAuth token from keychain"
+        fi
+        unset _ACCESS_TOKEN _REFRESH_TOKEN _EXPIRED KEYCHAIN_DATA
+    fi
+fi
+
+if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
+    echo "Error: No Claude credentials found."
     echo ""
-    echo "Run 'claude' to authenticate first."
+    echo "Options:"
+    echo "  1. Set ANTHROPIC_API_KEY env var or put key in ~/.anthropic/api_key"
+    echo "  2. Log in with 'claude' interactively (Max/Pro - token auto-extracted from keychain)"
+    echo "  3. Set CLAUDE_CODE_OAUTH_TOKEN env var"
     exit 1
 fi
+export ANTHROPIC_API_KEY
+export CLAUDE_CODE_OAUTH_TOKEN
 
 # Get current epoch number (if not already set)
 if [ -z "$EPOCH_NUMBER" ]; then

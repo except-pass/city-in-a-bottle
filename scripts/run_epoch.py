@@ -31,7 +31,7 @@ import psycopg2
 
 # Configuration
 POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
-POSTGRES_PORT = os.environ.get("POSTGRES_PORT", "5432")
+POSTGRES_PORT = os.environ.get("POSTGRES_PORT", "5434")
 POSTGRES_DB = os.environ.get("POSTGRES_DB", "agent_economy")
 POSTGRES_USER = os.environ.get("POSTGRES_USER", "agent_economy")
 POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "agent_economy_dev")
@@ -43,7 +43,7 @@ AGENTS_DIR = Path(__file__).parent.parent / ".data" / "agents"
 REPO_DIR = Path(__file__).parent.parent
 
 # Forgejo config (for authenticated pull)
-FORGEJO_URL = os.environ.get("FORGEJO_URL", "http://localhost:3000")
+FORGEJO_URL = os.environ.get("FORGEJO_URL", f"http://localhost:{os.environ.get('FORGEJO_PORT', '3300')}")
 FORGEJO_ORG = os.environ.get("FORGEJO_ORG", "workspace")
 FORGEJO_REPO = os.environ.get("FORGEJO_REPO", "agent-economy")
 
@@ -113,6 +113,12 @@ def rebuild_from_main(dry_run: bool = False) -> bool:
     """
     print("\n=== Rebuilding from main ===")
 
+    # Snapshot current HEAD to detect changes
+    head_before = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        capture_output=True, text=True, cwd=REPO_DIR
+    ).stdout.strip()
+
     # Check for uncommitted changes
     result = subprocess.run(
         ["git", "status", "--porcelain"],
@@ -125,45 +131,45 @@ def rebuild_from_main(dry_run: bool = False) -> bool:
     # Pull latest from Forgejo (where agents submit PRs)
     # Uses authenticated URL so token stays in memory, never in .git/config
     print("Pulling latest from forgejo/main...")
+    code_changed = False
     if not dry_run:
         token = get_forgejo_token()
         if not token:
             print("  Note: No Forgejo token found, skipping pull")
             print("  Set FORGEJO_TOKEN env var or run setup-forgejo")
         else:
-            # Use token-authenticated URL directly (same pattern as push_repo_to_forgejo)
-            auth_url = f"http://operator:{token}@localhost:3000/{FORGEJO_ORG}/{FORGEJO_REPO}.git"
+            forgejo_host = FORGEJO_URL.replace("http://", "")
+            auth_url = f"http://operator:{token}@{forgejo_host}/{FORGEJO_ORG}/{FORGEJO_REPO}.git"
             result = subprocess.run(
                 ["git", "pull", auth_url, "main"],
                 capture_output=True, text=True, cwd=REPO_DIR
             )
             if result.returncode != 0:
                 print(f"  Git pull failed: {result.stderr}")
-                # Don't abort - maybe nothing to pull yet
             else:
                 print(result.stdout if result.stdout else "  Already up to date")
 
-    # Rebuild containers
-    print("Rebuilding containers...")
-    if not dry_run:
-        result = subprocess.run(
+        # Check if HEAD moved
+        head_after = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True, text=True, cwd=REPO_DIR
+        ).stdout.strip()
+        code_changed = head_before != head_after
+
+    if code_changed:
+        print("Code changed, rebuilding and restarting...")
+        subprocess.run(
             ["docker", "compose", "--profile", "agent", "build"],
             capture_output=True, text=True,
             cwd=REPO_DIR / "infra"
         )
-        if result.returncode != 0:
-            print(f"Docker build failed: {result.stderr}")
-            # Don't fail - maybe nothing changed
-        else:
-            print("Containers rebuilt")
-
-    # Restart services
-    print("Restarting services...")
-    if not dry_run:
         subprocess.run(
             ["docker", "compose", "up", "-d"],
             cwd=REPO_DIR / "infra"
         )
+        print("Containers rebuilt and services restarted")
+    else:
+        print("No code changes, skipping rebuild")
 
     return True
 
@@ -243,8 +249,9 @@ def run_agent(agent_id: str, max_turns: int, epoch: int, dry_run: bool = False) 
         print(f"  {agent_id} completed successfully")
         return {"status": "completed", "output": result.stdout[-1000:]}  # Last 1000 chars
     else:
-        print(f"  {agent_id} failed: {result.stderr[-500:]}")
-        return {"status": "failed", "error": result.stderr[-500:]}
+        combined = (result.stdout[-500:] + "\n" + result.stderr[-500:]).strip()
+        print(f"  {agent_id} failed (exit {result.returncode}):\n{combined}")
+        return {"status": "failed", "error": combined}
 
 
 def run_epoch(
@@ -376,6 +383,46 @@ def run_epoch(
     for agent_id in agents:
         balance = get_agent_balance(conn, agent_id)
         print(f"  {agent_id}: {balance:,}")
+
+    # Per-agent activity summary
+    if not dry_run:
+        try:
+            from generate_report import (
+                get_runs_for_epoch, summarize_actions,
+                extract_messages, extract_file_writes,
+            )
+            runs = get_runs_for_epoch(conn, new_epoch)
+            if runs:
+                print("\nAgent activity:")
+                for run in runs:
+                    run_id, agent_id, started, ended, tokens_in, tokens_out, actions, reasoning, status = run
+                    print(f"\n  {agent_id} ({status}, spent {tokens_out:,} tokens):")
+
+                    # Messages sent
+                    messages = extract_messages(actions)
+                    for msg in messages[:3]:
+                        if msg["type"] == "channel":
+                            print(f"    -> #{msg['channel']}/{msg['topic']}: {msg['preview'][:60]}")
+                        else:
+                            print(f"    -> DM to {msg['to']}: {msg['preview'][:60]}")
+
+                    # Files written
+                    files = extract_file_writes(actions)
+                    for f in files[:3]:
+                        print(f"    -> wrote {f}")
+
+                    # Action counts
+                    summary = summarize_actions(actions)
+                    counts = ", ".join(f"{k}:{v}" for k, v in sorted(summary.items()))
+                    if counts:
+                        print(f"    [{counts}]")
+
+                    # Reasoning snippet
+                    if reasoning:
+                        snippet = reasoning.replace("\n", " ")[:100].strip()
+                        print(f"    \"{snippet}...\"")
+        except Exception as e:
+            print(f"\nWarning: Could not summarize activity: {e}")
 
     # Generate and save report
     if not dry_run:

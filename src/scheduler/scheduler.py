@@ -8,6 +8,7 @@ error backoff, and debt handling.
 
 import asyncio
 import json
+import os
 import logging
 import signal
 import sys
@@ -102,7 +103,7 @@ class Scheduler:
         agents_base_dir: str = "agents",
         nats_url: str = "nats://localhost:4222",
         postgres_host: str = "localhost",
-        postgres_port: int = 5432,
+        postgres_port: int = int(os.environ.get("POSTGRES_PORT", "5434")),
         debt_pause_threshold: Optional[int] = None,
     ):
         self.agents_base_dir = Path(agents_base_dir).resolve()

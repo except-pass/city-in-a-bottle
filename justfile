@@ -18,8 +18,8 @@ setup: up wait-healthy setup-zulip setup-forgejo
     @echo ""
     @echo "Services:"
     @echo "  Zulip:   https://localhost:8443"
-    @echo "  Forgejo: http://localhost:3000"
-    @echo "  Postgres: localhost:5432"
+    @echo "  Forgejo: http://localhost:${FORGEJO_PORT:-3300}"
+    @echo "  Postgres: localhost:${POSTGRES_PORT:-5434}"
     @echo ""
     @echo "Create an agent:  just create-agent <name>"
     @echo "Run an agent:     just run <name>"
@@ -54,9 +54,18 @@ logs *args:
 
 # Wait for all services to be healthy
 wait-healthy:
-    @echo "Waiting for services to be healthy..."
-    @timeout 300 bash -c 'until [ "$(docker compose -f infra/docker-compose.yml ps | grep -c healthy)" -ge 3 ]; do sleep 5; done' || (echo "Timeout waiting for services" && exit 1)
-    @echo "✓ All services healthy"
+    #!/usr/bin/env bash
+    echo "Waiting for services to be healthy..."
+    for i in $(seq 1 60); do
+        count=$(docker compose -f infra/docker-compose.yml ps 2>/dev/null | grep -c healthy)
+        if [ "$count" -ge 3 ]; then
+            echo "✓ All services healthy"
+            exit 0
+        fi
+        sleep 5
+    done
+    echo "Timeout waiting for services"
+    exit 1
 
 # =============================================================================
 # SETUP
@@ -115,6 +124,24 @@ credit agent amount reason:
 # Run a full epoch (rebuild, faucet, run all agents)
 epoch *args:
     source .venv/bin/activate && python scripts/run_epoch.py {{args}}
+
+# Run epochs in a loop until stopped (Ctrl+C to stop after current epoch)
+loop *args:
+    #!/usr/bin/env bash
+    stop=0
+    trap 'echo ""; echo "Stopping after current epoch finishes..."; stop=1' INT
+    n=0
+    while [ "$stop" -eq 0 ]; do
+        n=$((n + 1))
+        echo ""
+        echo "========== LOOP ITERATION $n ($(date)) =========="
+        source .venv/bin/activate && python scripts/run_epoch.py {{args}}
+        if [ "$stop" -eq 1 ]; then break; fi
+        echo "Sleeping 10s before next epoch (Ctrl+C to stop after current epoch)..."
+        sleep 10 &
+        wait $! 2>/dev/null
+    done
+    echo "Loop stopped after $n epoch(s)."
 
 # Run epoch in dry-run mode (show what would happen)
 epoch-dry:

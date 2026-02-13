@@ -39,8 +39,8 @@ async def post_job(
     message_bus: str = "nats",
     nats_url: str = "nats://localhost:4222",
     zulip_config: str = None,  # Path to .zuliprc or None
-    zulip_url: str = "http://localhost:8080",
-    postgres_dsn: str = "postgresql://agent_economy:agent_economy_dev@localhost:5432/agent_economy",
+    zulip_url: str = "http://localhost:8081",
+    postgres_dsn: str = "postgresql://agent_economy:agent_economy_dev@localhost:5434/agent_economy",
 ) -> dict:
     """
     Post a job to the board and record it in the database.
@@ -169,10 +169,10 @@ def main():
                        help="Message bus to use")
     parser.add_argument("--nats-url", default="nats://localhost:4222", help="NATS URL")
     parser.add_argument("--zulip-config", help="Path to admin .zuliprc file (for Zulip mode)")
-    parser.add_argument("--zulip-url", default="http://localhost:8080", help="Zulip URL")
+    parser.add_argument("--zulip-url", default="http://localhost:8081", help="Zulip URL")
     parser.add_argument(
         "--postgres-dsn",
-        default="postgresql://agent_economy:agent_economy_dev@localhost:5432/agent_economy",
+        default="postgresql://agent_economy:agent_economy_dev@localhost:5434/agent_economy",
         help="Postgres DSN",
     )
 

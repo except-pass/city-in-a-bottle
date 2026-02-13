@@ -19,7 +19,7 @@ import httpx
 from mcp.server import FastMCP
 
 # Configuration from environment
-FORGEJO_URL = os.environ.get("FORGEJO_URL", "http://localhost:3000")
+FORGEJO_URL = os.environ.get("FORGEJO_URL", f"http://localhost:{os.environ.get('FORGEJO_PORT', '3300')}")
 FORGEJO_TOKEN = os.environ.get("FORGEJO_TOKEN", "")
 AGENT_ID = os.environ.get("AGENT_ID", "unknown_agent")
 
