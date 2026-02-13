@@ -21,7 +21,7 @@ from ledger.client import LedgerClient
 
 # Configuration from environment
 POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
-POSTGRES_PORT = int(os.environ.get("POSTGRES_PORT", "5432"))
+POSTGRES_PORT = int(os.environ.get("POSTGRES_PORT", "5434"))
 POSTGRES_DB = os.environ.get("POSTGRES_DB", "agent_economy")
 POSTGRES_USER = os.environ.get("POSTGRES_USER", "agent_economy")
 POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "agent_economy_dev")

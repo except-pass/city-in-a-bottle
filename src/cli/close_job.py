@@ -36,8 +36,8 @@ async def close_job(
     message_bus: str = "nats",
     nats_url: str = "nats://localhost:4222",
     zulip_config: str = None,
-    zulip_url: str = "http://localhost:8080",
-    postgres_dsn: str = "postgresql://agent_economy:agent_economy_dev@localhost:5432/agent_economy",
+    zulip_url: str = "http://localhost:8081",
+    postgres_dsn: str = "postgresql://agent_economy:agent_economy_dev@localhost:5434/agent_economy",
 ) -> dict:
     """
     Close/cancel a job without paying reward.
@@ -137,10 +137,10 @@ def main():
                        help="Message bus to use")
     parser.add_argument("--nats-url", default="nats://localhost:4222", help="NATS URL")
     parser.add_argument("--zulip-config", help="Path to admin .zuliprc file")
-    parser.add_argument("--zulip-url", default="http://localhost:8080", help="Zulip URL")
+    parser.add_argument("--zulip-url", default="http://localhost:8081", help="Zulip URL")
     parser.add_argument(
         "--postgres-dsn",
-        default="postgresql://agent_economy:agent_economy_dev@localhost:5432/agent_economy",
+        default="postgresql://agent_economy:agent_economy_dev@localhost:5434/agent_economy",
         help="Postgres DSN",
     )
 

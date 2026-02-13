@@ -35,8 +35,8 @@ async def accept_bid(
     message_bus: str = "nats",
     nats_url: str = "nats://localhost:4222",
     zulip_config: str = None,
-    zulip_url: str = "http://localhost:8080",
-    postgres_dsn: str = "postgresql://agent_economy:agent_economy_dev@localhost:5432/agent_economy",
+    zulip_url: str = "http://localhost:8081",
+    postgres_dsn: str = "postgresql://agent_economy:agent_economy_dev@localhost:5434/agent_economy",
 ) -> dict:
     """Accept a bid, assigning the job to the agent."""
     job_uuid = UUID(job_id)
@@ -126,8 +126,8 @@ async def reject_bid(
     message_bus: str = "nats",
     nats_url: str = "nats://localhost:4222",
     zulip_config: str = None,
-    zulip_url: str = "http://localhost:8080",
-    postgres_dsn: str = "postgresql://agent_economy:agent_economy_dev@localhost:5432/agent_economy",
+    zulip_url: str = "http://localhost:8081",
+    postgres_dsn: str = "postgresql://agent_economy:agent_economy_dev@localhost:5434/agent_economy",
 ) -> dict:
     """Reject a bid (just posts a notice, doesn't change job state)."""
     job_uuid = UUID(job_id)
@@ -199,8 +199,8 @@ def main():
                        help="Message bus to use")
     parser.add_argument("--nats-url", default="nats://localhost:4222")
     parser.add_argument("--zulip-config", help="Path to admin .zuliprc file")
-    parser.add_argument("--zulip-url", default="http://localhost:8080")
-    parser.add_argument("--postgres-dsn", default="postgresql://agent_economy:agent_economy_dev@localhost:5432/agent_economy")
+    parser.add_argument("--zulip-url", default="http://localhost:8081")
+    parser.add_argument("--postgres-dsn", default="postgresql://agent_economy:agent_economy_dev@localhost:5434/agent_economy")
 
     args = parser.parse_args()
 

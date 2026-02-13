@@ -23,7 +23,7 @@ async def list_jobs(
     status: str = None,
     show_all: bool = False,
     limit: int = 50,
-    postgres_dsn: str = "postgresql://agent_economy:agent_economy_dev@localhost:5432/agent_economy",
+    postgres_dsn: str = "postgresql://agent_economy:agent_economy_dev@localhost:5434/agent_economy",
 ) -> list[dict]:
     """
     List jobs from the database.
@@ -116,7 +116,7 @@ def main():
     parser.add_argument("--limit", "-l", type=int, default=50, help="Maximum jobs to show")
     parser.add_argument(
         "--postgres-dsn",
-        default="postgresql://agent_economy:agent_economy_dev@localhost:5432/agent_economy",
+        default="postgresql://agent_economy:agent_economy_dev@localhost:5434/agent_economy",
         help="Postgres DSN",
     )
     parser.add_argument("--json", action="store_true", help="Output as JSON")

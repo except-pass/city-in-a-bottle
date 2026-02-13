@@ -23,10 +23,12 @@ import sys
 import time
 from pathlib import Path
 
+import os
+
 import httpx
 
 # URL for setup (from host)
-DEFAULT_URL = "http://localhost:3000"
+DEFAULT_URL = f"http://localhost:{os.environ.get('FORGEJO_PORT', '3300')}"
 # URL for agents (from inside container)
 AGENT_FORGEJO_URL = "http://forgejo:3000"
 DEFAULT_ADMIN_USER = "operator"
@@ -566,7 +568,8 @@ def push_repo_to_forgejo(
     print(f"  Pushing {current_branch} to {remote_name}...")
 
     # Use token auth in URL for push
-    auth_url = f"http://operator:{token}@localhost:3000/{org}/{repo_name}.git"
+    forgejo_port = os.environ.get("FORGEJO_PORT", "3300")
+    auth_url = f"http://operator:{token}@localhost:{forgejo_port}/{org}/{repo_name}.git"
 
     result = subprocess.run(
         ["git", "push", "--force", auth_url, f"{current_branch}:main"],

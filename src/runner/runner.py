@@ -50,7 +50,7 @@ except ImportError:
 @dataclass
 class ForgejoConfig:
     """Forgejo configuration for git operations."""
-    url: str = "http://localhost:3000"
+    url: str = f"http://localhost:{os.environ.get('FORGEJO_PORT', '3300')}"
     username: str = ""
     token: str = ""
 
@@ -100,14 +100,14 @@ class AgentRunner:
         self,
         agents_base_dir: str = "agents",
         nats_url: str = "nats://localhost:4222",
-        zulip_url: str = "http://localhost:8080",
+        zulip_url: str = "http://localhost:8081",
         message_bus: str = "nats",  # "nats" or "zulip"
         postgres_host: str = "localhost",
-        postgres_port: int = 5432,
+        postgres_port: int = int(os.environ.get("POSTGRES_PORT", "5434")),
         postgres_db: str = "agent_economy",
         postgres_user: str = "agent_economy",
         postgres_password: str = "agent_economy_dev",
-        forgejo_url: str = "http://localhost:3000",
+        forgejo_url: str = f"http://localhost:{os.environ.get('FORGEJO_PORT', '3300')}",
     ):
         self.agents_base_dir = Path(agents_base_dir).resolve()
         self.nats_url = nats_url
@@ -244,7 +244,7 @@ class AgentRunner:
 
         # Allow ZULIP_URL to override .zuliprc site (for Docker networking)
         # Use insecure=True for Docker connections to handle Zulip's self-signed cert
-        if self.zulip_url and self.zulip_url != "http://localhost:8080":
+        if self.zulip_url and self.zulip_url != "http://localhost:8081":
             client = zulip.Client(config_file=str(zuliprc_path), site=self.zulip_url, insecure=True)
         else:
             client = zulip.Client(config_file=str(zuliprc_path))
@@ -632,8 +632,8 @@ if __name__ == "__main__":
         parser.add_argument("--agents-dir", default="agents", help="Agents base directory")
         parser.add_argument("--nats-url", default=os.environ.get("NATS_URL", "nats://localhost:4222"),
                           help="NATS URL (default: $NATS_URL or nats://localhost:4222)")
-        parser.add_argument("--zulip-url", default=os.environ.get("ZULIP_URL", "http://localhost:8080"),
-                          help="Zulip URL (default: $ZULIP_URL or http://localhost:8080)")
+        parser.add_argument("--zulip-url", default=os.environ.get("ZULIP_URL", "http://localhost:8081"),
+                          help="Zulip URL (default: $ZULIP_URL or http://localhost:8081)")
         parser.add_argument("--message-bus", default="zulip", choices=["nats", "zulip"],
                           help="Message bus to use (default: zulip)")
         parser.add_argument("--postgres-host", default=os.environ.get("POSTGRES_HOST", "localhost"),

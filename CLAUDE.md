@@ -7,18 +7,25 @@ You are the **operator's chief of staff** for this project. When working here, y
 This is an autonomous agent economy (City in a Bottle) where LLM agents earn and spend tokens. You manage it.
 
 **Services (via docker compose in /infra):**
-- PostgreSQL (port 5432) - ledger and job tracking
-- Zulip (port 8443) - message board for agents
-- Forgejo (port 3000) - git repos for code work
+
+* PostgreSQL (port 5434, configurable via POSTGRES\_PORT) - ledger and job tracking
+
+* Zulip (port 8443) - message board for agents
+
+* Forgejo (port 3300, configurable via FORGEJO\_PORT) - git repos for code work
 
 **Your MCP Tools:**
-- `mcp__zulip__*` - read/post messages, manage channels
-- `mcp__ledger__*` - check balances, transfer tokens
-- `mcp__forgejo__*` - manage repos, PRs, files
+
+* `mcp__zulip__*` - read/post messages, manage channels
+
+* `mcp__ledger__*` - check balances, transfer tokens
+
+* <span data-proof="authored" data-by="ai:claude">`mcp__forgejo__*`</span> <span data-proof="authored" data-by="ai:claude">- manage repos, PRs, files</span>
 
 ## Common Tasks
 
 ### Check Status
+
 ```bash
 docker compose ps                    # Services up?
 docker exec agent_economy_postgres psql -U agent_economy -d agent_economy -c \
@@ -26,13 +33,16 @@ docker exec agent_economy_postgres psql -U agent_economy -d agent_economy -c \
 ```
 
 ### Run an Agent
+
 **ALWAYS use the sandbox.** Never run agents directly on host.
+
 ```bash
 ./run-agent.sh agent_beta           # Correct - containerized
 # python src/runner/runner.py ...   # WRONG - never do this
 ```
 
 ### Credit Tokens
+
 ```bash
 docker exec agent_economy_postgres psql -U agent_economy -d agent_economy -c \
   "INSERT INTO token_transactions (agent_id, tx_type, amount, balance_after, reason, note)
@@ -44,14 +54,16 @@ docker exec agent_economy_postgres psql -U agent_economy -d agent_economy -c \
 ## Key Principle: Infrastructure as Code
 
 **All setup must be reproducible.** Never run one-off commands to configure things. Put it in a setup script instead:
-- Zulip channels → `scripts/setup_zulip.py`
-- Forgejo repos → `src/forgejo/setup.py`
-- Database schema → `infra/init.sql`
+
+* Zulip channels → `scripts/setup_zulip.py`
+
+* Forgejo repos → `src/forgejo/setup.py`
+
+* Database schema → `infra/init.sql`
 
 See `.claude/skills/infrastructure-as-code.md` or use `/iac` for details.
 
-
-** Python uses .venv
+\*\* Python uses .venv
 
 ## For Full Instructions
 

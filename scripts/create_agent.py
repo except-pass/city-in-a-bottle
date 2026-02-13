@@ -43,14 +43,14 @@ ZULIP_ADMIN_EMAIL = "admin@agent-economy.local"
 ZULIP_ADMIN_PASSWORD = "admin-dev-password-123"
 
 # Forgejo config
-FORGEJO_URL = os.environ.get("FORGEJO_URL", "http://localhost:3000")
+FORGEJO_URL = os.environ.get("FORGEJO_URL", f"http://localhost:{os.environ.get('FORGEJO_PORT', '3300')}")
 # Container-facing URL for agent configs (Docker DNS, not localhost)
 AGENT_FORGEJO_URL = os.environ.get("AGENT_FORGEJO_URL", "http://forgejo:3000")
 FORGEJO_CONTAINER = "agent_economy_forgejo"
 
 # Postgres config
 POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
-POSTGRES_PORT = os.environ.get("POSTGRES_PORT", "5432")
+POSTGRES_PORT = os.environ.get("POSTGRES_PORT", "5434")
 POSTGRES_DB = os.environ.get("POSTGRES_DB", "agent_economy")
 POSTGRES_USER = os.environ.get("POSTGRES_USER", "agent_economy")
 POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "agent_economy_dev")

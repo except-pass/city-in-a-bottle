@@ -24,7 +24,7 @@ async def accept_work(
     job_id: str,
     agent_id: str,
     note: str = None,
-    postgres_dsn: str = "postgresql://agent_economy:agent_economy_dev@localhost:5432/agent_economy",
+    postgres_dsn: str = "postgresql://agent_economy:agent_economy_dev@localhost:5434/agent_economy",
 ) -> dict:
     """
     Accept work and credit tokens to the agent.
@@ -104,7 +104,7 @@ def main():
     parser.add_argument("--note", "-n", help="Optional note")
     parser.add_argument(
         "--postgres-dsn",
-        default="postgresql://agent_economy:agent_economy_dev@localhost:5432/agent_economy",
+        default="postgresql://agent_economy:agent_economy_dev@localhost:5434/agent_economy",
         help="Postgres DSN",
     )
 

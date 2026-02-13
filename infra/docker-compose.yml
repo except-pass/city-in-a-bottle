@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: agent_economy_dev
       POSTGRES_DB: agent_economy
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5434}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
@@ -34,9 +34,9 @@ services:
       # Memcached - single line
       SETTING_CACHES: '{"default": {"BACKEND": "django_bmemcached.memcached.BMemcached", "LOCATION": "memcached-zulip:11211"}}'
       # Server settings - use HTTPS port since Zulip forces HTTPS redirect
-      SETTING_EXTERNAL_HOST: localhost:8443
+      SETTING_EXTERNAL_HOST: localhost.local:${ZULIP_HTTPS_PORT:-8443}
       # Accept internal Docker container name for agent-to-zulip communication
-      SETTING_ALLOWED_HOSTS: "['localhost:8443', 'zulip']"
+      SETTING_ALLOWED_HOSTS: "['localhost.local:${ZULIP_HTTPS_PORT:-8443}', 'localhost:${ZULIP_HTTPS_PORT:-8443}', 'zulip']"
       SETTING_ZULIP_ADMINISTRATOR: admin@agent-economy.local
       # Disable email - not needed for agent communication
       SETTING_EMAIL_BACKEND: django.core.mail.backends.console.EmailBackend
@@ -57,8 +57,8 @@ services:
       SETTING_DEFAULT_REALM_NAME: "City in a Bottle"
       SETTING_ZULIP_ORG_NAME: "City in a Bottle"
     ports:
-      - "8080:80"     # Web UI and API
-      - "8443:443"    # HTTPS (self-signed)
+      - "${ZULIP_HTTP_PORT:-8081}:80"     # Web UI and API
+      - "${ZULIP_HTTPS_PORT:-8443}:443"  # HTTPS (self-signed)
     volumes:
       - zulip_data:/data
     depends_on:
@@ -121,7 +121,7 @@ services:
       - USER_GID=1000
       - FORGEJO__database__DB_TYPE=sqlite3
       - FORGEJO__database__PATH=/data/gitea/forgejo.db
-      - FORGEJO__server__ROOT_URL=http://localhost:3000
+      - FORGEJO__server__ROOT_URL=http://localhost:${FORGEJO_PORT:-3300}
       - FORGEJO__server__HTTP_PORT=3000
       - FORGEJO__server__SSH_PORT=2222
       - FORGEJO__service__DISABLE_REGISTRATION=false
@@ -129,7 +129,7 @@ services:
       # Security: require PR for main branch changes
       - FORGEJO__repository__DEFAULT_PUSH_CREATE_PRIVATE=false
     ports:
-      - "3000:3000"   # Web UI
+      - "${FORGEJO_PORT:-3300}:3000"   # Web UI
       - "2222:2222"   # SSH for git
     volumes:
       - forgejo_data:/data
@@ -146,13 +146,14 @@ services:
       context: ../
       dockerfile: infra/docker/agent.Dockerfile
     volumes:
-      # Mount just the credentials file (read-only)
-      - ${HOME}/.claude/.credentials.json:/claude-auth/.credentials.json:ro
       # Mount agent's private directory for persistent memory
       - ../.data/agents:/app/agents
       # Mount the repo so agents can read/modify code and make PRs (Bill of Rights #9)
       - ../:/repo
     environment:
+      # Claude auth - OAuth token from Max/Pro subscription (passed from host)
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       # Zulip message bus (uses HTTPS with insecure mode for self-signed cert)
       - ZULIP_URL=https://zulip:443
       - POSTGRES_HOST=postgres

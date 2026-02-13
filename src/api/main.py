@@ -32,7 +32,7 @@ from src.board.client import BoardClient, MessageType
 
 # Configuration from environment
 DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = int(os.getenv("DB_PORT", "5432"))
+DB_PORT = int(os.getenv("DB_PORT", "5434"))
 DB_NAME = os.getenv("DB_NAME", "agent_economy")
 DB_USER = os.getenv("DB_USER", "agent_economy")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "agent_economy_dev")

@@ -35,7 +35,7 @@ class LedgerClient:
     def __init__(
         self,
         host: str = "localhost",
-        port: int = 5432,
+        port: int = int(os.environ.get("POSTGRES_PORT", "5434")),
         database: str = "agent_economy",
         user: str = "agent_economy",
         password: str = "agent_economy_dev",

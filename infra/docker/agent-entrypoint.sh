@@ -1,13 +1,17 @@
 #!/bin/bash
 set -e
 
-# Copy credentials from mounted read-only location to writable home
-if [ -f "/claude-auth/.credentials.json" ]; then
+# Auth: support OAuth token (Max/Pro), API key, or legacy credentials file
+if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+    echo "Using Claude OAuth token (Max/Pro subscription)"
+elif [ -n "$ANTHROPIC_API_KEY" ]; then
+    echo "Using Anthropic API key"
+elif [ -f "/claude-auth/.credentials.json" ]; then
     cp /claude-auth/.credentials.json /home/agent/.claude/.credentials.json
-    echo "Credentials copied successfully"
+    echo "Using legacy credentials file"
 else
-    echo "Warning: No credentials found at /claude-auth/.credentials.json"
-    echo "Mount your ~/.claude/.credentials.json to /claude-auth/.credentials.json"
+    echo "Warning: No Claude credentials found"
+    echo "Set CLAUDE_CODE_OAUTH_TOKEN, ANTHROPIC_API_KEY, or mount credentials file"
 fi
 
 # Run the agent runner
