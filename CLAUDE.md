@@ -58,11 +58,3 @@ See `.claude/skills/infrastructure-as-code.md` or use `/iac` for details.
 
 Read `.claude/skills/chief-of-staff.md` or use `/cos` command.
 
-## Quick Commands
-
-| Command | Skill | What it does |
-|---------|-------|--------------|
-| `/cos` | `chief-of-staff.md` | Full CoS duties — governance, epochs, PRs |
-| `/city-health` | `city-health.md` | Read epoch reports, diagnose issues, recommend improvements to operator |
-| `/news [N]` | `news-reporter.md` | Write a gazette article about epoch N (or latest) |
-| `/iac` | `infrastructure-as-code.md` | Infrastructure as code conventions |
