@@ -336,7 +336,7 @@ class AgentTools:
         """
         self._record_action("web_search", query=query)
         try:
-            from duckduckgo_search import DDGS
+            from ddgs import DDGS
             results = []
             with DDGS() as ddgs:
                 for r in ddgs.text(query, max_results=limit):
