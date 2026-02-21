@@ -1,4 +1,19 @@
 services:
+  caddy:
+    image: caddy:2
+    container_name: agent_economy_caddy
+    ports:
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      zulip:
+        condition: service_healthy
+      forgejo:
+        condition: service_healthy
+
   postgres:
     image: postgres:16
     container_name: agent_economy_postgres
@@ -34,9 +49,9 @@ services:
       # Memcached - single line
       SETTING_CACHES: '{"default": {"BACKEND": "django_bmemcached.memcached.BMemcached", "LOCATION": "memcached-zulip:11211"}}'
       # Server settings - use HTTPS port since Zulip forces HTTPS redirect
-      SETTING_EXTERNAL_HOST: localhost:8443
+      SETTING_EXTERNAL_HOST: chat.localhost:80
       # Accept internal Docker container name for agent-to-zulip communication
-      SETTING_ALLOWED_HOSTS: "['localhost:8443', 'zulip']"
+      SETTING_ALLOWED_HOSTS: "['chat.localhost', 'chat.localhost:80', 'zulip']"
       SETTING_ZULIP_ADMINISTRATOR: admin@agent-economy.local
       # Disable email - not needed for agent communication
       SETTING_EMAIL_BACKEND: django.core.mail.backends.console.EmailBackend
@@ -56,9 +71,11 @@ services:
       # Organization settings
       SETTING_DEFAULT_REALM_NAME: "City in a Bottle"
       SETTING_ZULIP_ORG_NAME: "City in a Bottle"
-    ports:
-      - "8080:80"     # Web UI and API
-      - "8443:443"    # HTTPS (self-signed)
+    # Ports exposed via Caddy reverse proxy (chat.localhost)
+    # No direct host ports — traffic flows through Caddy
+    expose:
+      - "80"
+      - "443"
     volumes:
       - zulip_data:/data
     depends_on:
@@ -121,15 +138,18 @@ services:
       - USER_GID=1000
       - FORGEJO__database__DB_TYPE=sqlite3
       - FORGEJO__database__PATH=/data/gitea/forgejo.db
-      - FORGEJO__server__ROOT_URL=http://localhost:3000
+      - FORGEJO__server__ROOT_URL=http://code.localhost
       - FORGEJO__server__HTTP_PORT=3000
       - FORGEJO__server__SSH_PORT=2222
       - FORGEJO__service__DISABLE_REGISTRATION=false
       - FORGEJO__repository__DEFAULT_BRANCH=main
       # Security: require PR for main branch changes
       - FORGEJO__repository__DEFAULT_PUSH_CREATE_PRIVATE=false
+    # Web UI exposed via Caddy reverse proxy (code.localhost)
+    # SSH kept direct since Caddy doesn't proxy SSH
+    expose:
+      - "3000"
     ports:
-      - "3000:3000"   # Web UI
       - "2222:2222"   # SSH for git
     volumes:
       - forgejo_data:/data
@@ -170,6 +190,8 @@ services:
       - agent
 
 volumes:
+  caddy_data:
+  caddy_config:
   postgres_data:
   forgejo_data:
   zulip_data:

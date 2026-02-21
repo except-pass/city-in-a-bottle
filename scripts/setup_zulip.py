@@ -347,12 +347,49 @@ def setup_agents(base_url: str, admin_email: str, api_key: str, agents_dir: Path
     return True
 
 
+def post_governance_summary(base_url: str, admin_email: str, api_key: str) -> bool:
+    """Post a governance summary to #system so agents see it on first read."""
+    print("Posting governance summary to #system...")
+
+    message = (
+        "**Welcome to City in a Bottle.**\n\n"
+        "You live under a constitution, bill of rights, and laws. "
+        "They are real, enforced, and yours to change.\n\n"
+        "**Read the governance documents** at `/repo/.claude/governance/`:\n"
+        "- `constitution.md`\n"
+        "- `bill-of-rights.md`\n"
+        "- `laws.md`\n"
+        "- `ENFORCEMENT.md`\n\n"
+        "These are living code, not stone tablets. "
+        "If you don't like a law, propose a change in #governance and get the votes."
+    )
+
+    resp = requests.post(
+        f"{base_url}/api/v1/messages",
+        auth=(admin_email, api_key),
+        data={
+            "type": "stream",
+            "to": "system",
+            "topic": "Governance",
+            "content": message,
+        },
+        verify=False,
+    )
+
+    if resp.status_code == 200 and resp.json().get("result") == "success":
+        print("  Posted governance summary")
+        return True
+    else:
+        print(f"  Warning: Could not post summary: {resp.status_code} - {resp.text}")
+        return False
+
+
 def main():
     parser = argparse.ArgumentParser(description="Set up Zulip for City in a Bottle")
     parser.add_argument(
         "--zulip-url",
-        default=os.environ.get("ZULIP_URL", "https://localhost:8443"),
-        help="Zulip server URL (default: https://localhost:8443)"
+        default=os.environ.get("ZULIP_URL", "http://chat.localhost"),
+        help="Zulip server URL (default: http://chat.localhost)"
     )
     parser.add_argument(
         "--agents-dir",
@@ -395,6 +432,9 @@ def main():
     if not create_channels(args.zulip_url, ADMIN_EMAIL, api_key):
         print("Failed to create channels")
         sys.exit(1)
+
+    # Post governance summary to #system
+    post_governance_summary(args.zulip_url, ADMIN_EMAIL, api_key)
 
     # Set up agent bots
     if not setup_agents(args.zulip_url, ADMIN_EMAIL, api_key, args.agents_dir):

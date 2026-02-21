@@ -132,7 +132,7 @@ def rebuild_from_main(dry_run: bool = False) -> bool:
             print("  Set FORGEJO_TOKEN env var or run setup-forgejo")
         else:
             # Use token-authenticated URL directly (same pattern as push_repo_to_forgejo)
-            auth_url = f"http://operator:{token}@localhost:3000/{FORGEJO_ORG}/{FORGEJO_REPO}.git"
+            auth_url = f"http://operator:{token}@code.localhost/{FORGEJO_ORG}/{FORGEJO_REPO}.git"
             result = subprocess.run(
                 ["git", "pull", auth_url, "main"],
                 capture_output=True, text=True, cwd=REPO_DIR
@@ -247,6 +247,48 @@ def run_agent(agent_id: str, max_turns: int, epoch: int, dry_run: bool = False) 
         return {"status": "failed", "error": result.stderr[-500:]}
 
 
+def run_merge_bot(dry_run: bool = False) -> int:
+    """Run the merge bot to auto-merge approved PRs.
+
+    Returns number of PRs merged.
+    """
+    print("\n=== Running merge bot ===")
+    if dry_run:
+        print("  [DRY RUN] Would check for mergeable PRs")
+        return 0
+
+    try:
+        result = subprocess.run(
+            [sys.executable, str(REPO_DIR / "scripts" / "merge_bot.py")]
+            + (["--dry-run"] if dry_run else []),
+            capture_output=True, text=True, cwd=REPO_DIR,
+            timeout=120,
+        )
+        print(result.stdout)
+        if result.stderr:
+            print(result.stderr)
+        return 0 if result.returncode == 0 else -1
+    except Exception as e:
+        print(f"  Merge bot error: {e}")
+        return -1
+
+
+def check_faucet_pool(conn) -> int:
+    """Check remaining tokens in the faucet pool.
+
+    Returns remaining tokens, or -1 if faucet_funding table doesn't exist yet.
+    """
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT remaining FROM faucet_pool")
+        row = cur.fetchone()
+        return row[0] if row else 0
+    except Exception:
+        # Table might not exist yet (pre-migration)
+        conn.rollback()
+        return -1
+
+
 def run_epoch(
     faucet_amount: int = DEFAULT_FAUCET,
     max_turns: int = DEFAULT_MAX_TURNS,
@@ -262,6 +304,9 @@ def run_epoch(
     if dry_run:
         print("*** DRY RUN - No changes will be made ***")
 
+    # Step 1: Auto-merge approved PRs
+    run_merge_bot(dry_run)
+
     # Connect to database
     conn = get_db_connection()
 
@@ -273,7 +318,7 @@ def run_epoch(
     print(f"  Faucet: {faucet_amount:,} tokens per agent")
     print(f"  Max turns: {max_turns}")
 
-    # Rebuild from main
+    # Step 2: Rebuild from main (pulls merged code)
     if not rebuild_from_main(dry_run):
         print("ERROR: Rebuild failed, aborting epoch")
         return False
@@ -291,6 +336,20 @@ def run_epoch(
         return False
 
     print(f"\nAgents to run: {', '.join(agents)}")
+
+    # Step 3: Check faucet pool
+    faucet_remaining = check_faucet_pool(conn)
+    faucet_enabled = True
+    if faucet_remaining == -1:
+        print("\n  Note: faucet_funding table not found, distributing faucet without pool check")
+    elif faucet_remaining <= 0:
+        print("\n  *** FAUCET POOL EMPTY — no tokens will be distributed this epoch ***")
+        faucet_enabled = False
+    else:
+        needed = faucet_amount * len(agents)
+        print(f"\n  Faucet pool: {faucet_remaining:,} remaining (need {needed:,} for this epoch)")
+        if faucet_remaining < needed:
+            print(f"  *** WARNING: Pool is running low — may not cover all agents ***")
 
     # Create epoch record
     if not dry_run:
@@ -312,11 +371,19 @@ def run_epoch(
         balance_before = get_agent_balance(conn, agent_id)
         print(f"  Balance before: {balance_before:,}")
 
-        # Credit faucet
-        if not dry_run:
-            new_balance = credit_faucet(conn, agent_id, faucet_amount, new_epoch)
-            print(f"  Faucet credited: +{faucet_amount:,} -> {new_balance:,}")
-            total_faucet += faucet_amount
+        # Credit faucet (if pool has funds)
+        if not dry_run and faucet_enabled:
+            # Re-check pool for each agent (hard stop mid-epoch if pool drains)
+            pool_check = check_faucet_pool(conn)
+            if pool_check != -1 and pool_check < faucet_amount:
+                print(f"  *** Faucet pool exhausted — skipping faucet for {agent_id} ***")
+                faucet_enabled = False
+            else:
+                new_balance = credit_faucet(conn, agent_id, faucet_amount, new_epoch)
+                print(f"  Faucet credited: +{faucet_amount:,} -> {new_balance:,}")
+                total_faucet += faucet_amount
+        elif not dry_run and not faucet_enabled:
+            print(f"  Faucet skipped (pool empty)")
 
             # Record participation
             cur = conn.cursor()

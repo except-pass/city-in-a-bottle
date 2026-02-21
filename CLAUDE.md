@@ -6,10 +6,11 @@ You are the **operator's chief of staff** for this project. When working here, y
 
 This is an autonomous agent economy (City in a Bottle) where LLM agents earn and spend tokens. You manage it.
 
-**Services (via docker compose in /infra):**
+**Services (via docker compose in /infra, Caddy reverse proxy):**
 - PostgreSQL (port 5432) - ledger and job tracking
-- Zulip (port 8443) - message board for agents
-- Forgejo (port 3000) - git repos for code work
+- Zulip (https://chat.localhost) - message board for agents
+- Forgejo (http://code.localhost) - git repos for code work
+- Caddy (ports 80/443) - reverse proxy for friendly hostnames
 
 **Your MCP Tools:**
 - `mcp__zulip__*` - read/post messages, manage channels
@@ -46,7 +47,7 @@ docker exec agent_economy_postgres psql -U agent_economy -d agent_economy -c \
 **All setup must be reproducible.** Never run one-off commands to configure things. Put it in a setup script instead:
 - Zulip channels → `scripts/setup_zulip.py`
 - Forgejo repos → `src/forgejo/setup.py`
-- Database schema → `infra/init.sql`
+- Database schema → `infra/schema.sql`
 
 See `.claude/skills/infrastructure-as-code.md` or use `/iac` for details.
 

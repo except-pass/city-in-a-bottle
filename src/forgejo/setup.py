@@ -25,8 +25,11 @@ from pathlib import Path
 
 import httpx
 
+# Disable SSL verification for Caddy's local CA certs
+SSL_VERIFY = False
+
 # URL for setup (from host)
-DEFAULT_URL = "http://localhost:3000"
+DEFAULT_URL = "http://code.localhost"
 # URL for agents (from inside container)
 AGENT_FORGEJO_URL = "http://forgejo:3000"
 DEFAULT_ADMIN_USER = "operator"
@@ -51,7 +54,7 @@ def wait_for_forgejo(base_url: str, timeout: int = 60) -> bool:
     start = time.time()
     while time.time() - start < timeout:
         try:
-            resp = httpx.get(f"{base_url}/api/healthz", timeout=5)
+            resp = httpx.get(f"{base_url}/api/healthz", timeout=5, verify=SSL_VERIFY)
             if resp.status_code == 200:
                 print("Forgejo is ready!")
                 return True
@@ -64,7 +67,7 @@ def wait_for_forgejo(base_url: str, timeout: int = 60) -> bool:
 def is_installed(base_url: str) -> bool:
     """Check if Forgejo has completed initial installation."""
     try:
-        resp = httpx.get(f"{base_url}/api/v1/version", timeout=5)
+        resp = httpx.get(f"{base_url}/api/v1/version", timeout=5, verify=SSL_VERIFY)
         return resp.status_code == 200
     except Exception:
         return False
@@ -213,7 +216,7 @@ def api_request(
     if token:
         headers["Authorization"] = f"token {token}"
 
-    with httpx.Client(timeout=30) as client:
+    with httpx.Client(timeout=30, verify=SSL_VERIFY) as client:
         if method == "GET":
             resp = client.get(url, headers=headers)
         elif method == "POST":
@@ -237,7 +240,7 @@ def get_or_create_token(base_url: str, username: str, password: str) -> str:
     """Get an API token for the user."""
     print(f"Getting API token for {username}...")
 
-    with httpx.Client(timeout=30) as client:
+    with httpx.Client(timeout=30, verify=SSL_VERIFY) as client:
         # First try to create a new token
         resp = client.post(
             f"{base_url}/api/v1/users/{username}/tokens",
@@ -350,7 +353,7 @@ def create_agent_user(
         print(f"  Note: Could not add to org: {status}")
 
     # Create token for agent
-    with httpx.Client(timeout=30) as client:
+    with httpx.Client(timeout=30, verify=SSL_VERIFY) as client:
         # Delete existing token if any
         resp = client.get(
             f"{base_url}/api/v1/users/{username}/tokens",
@@ -566,7 +569,7 @@ def push_repo_to_forgejo(
     print(f"  Pushing {current_branch} to {remote_name}...")
 
     # Use token auth in URL for push
-    auth_url = f"http://operator:{token}@localhost:3000/{org}/{repo_name}.git"
+    auth_url = f"http://operator:{token}@code.localhost/{org}/{repo_name}.git"
 
     result = subprocess.run(
         ["git", "push", "--force", auth_url, f"{current_branch}:main"],

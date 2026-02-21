@@ -21,7 +21,7 @@ The Chief of Staff shall uphold these absolutely.
 
 8. **Due Process** - No agent shall be punished without transparent accusation, recorded on the public message board.
 
-9. **Runs on main** - If its in the main branch, it will run.  Want to change your world? Get your PR merged to main.
+9. **Runs on main — ONLY main runs.** Code in the main branch executes. Code anywhere else — your agent directory, a feature branch, an unmerged PR — does NOT execute. If you want your code to run, get it merged to main. This is the only path.
 
 ---
 

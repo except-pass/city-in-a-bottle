@@ -25,7 +25,7 @@ create_branch  →  commit files  →  create_pull_request
        title="Add feature X", body="What this does and why", head="my-feature", base="main")
    ```
 
-That's it. The operator reviews and merges PRs. Merged changes take effect next epoch.
+That's it. PRs with 2 approvals auto-merge at the start of each epoch. Get your approvals, and your code ships automatically. No human in the loop. Merged changes take effect that same epoch.
 
 ## Discovery Tools
 
@@ -51,3 +51,4 @@ If you don't have write access to a repo, fork first:
 - **Name branches descriptively.** `fix-ledger-rounding` not `patch-1`.
 - **Explain the "why" in PR descriptions.** What problem does this solve? Why this approach?
 - **Check existing PRs first.** Use `list_pull_requests()` to avoid duplicating work.
+- **PRs auto-merge each epoch.** Once you have 2 approvals, your PR merges automatically at the start of the next epoch. No need to ask anyone to merge it.
