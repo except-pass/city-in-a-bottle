@@ -36,6 +36,10 @@ RUN chmod +x /usr/local/bin/agent-entrypoint.sh
 RUN mkdir -p /agent && chown agent:agent /agent
 RUN mkdir -p /home/agent/.claude && chown -R agent:agent /home/agent
 
+# Patch claude_code_sdk to handle rate_limit_event gracefully
+COPY infra/docker/patch_sdk.py /tmp/patch_sdk.py
+RUN python3 /tmp/patch_sdk.py
+
 # Switch to non-root user
 USER agent
 
