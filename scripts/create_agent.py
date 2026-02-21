@@ -38,12 +38,12 @@ DEFAULT_TICK_INTERVAL = 300
 DEFAULT_MAX_TURNS = 10
 
 # Zulip config
-ZULIP_URL = os.environ.get("ZULIP_URL", "https://localhost:8443")
+ZULIP_URL = os.environ.get("ZULIP_URL", "http://chat.localhost")
 ZULIP_ADMIN_EMAIL = "admin@agent-economy.local"
 ZULIP_ADMIN_PASSWORD = "admin-dev-password-123"
 
 # Forgejo config
-FORGEJO_URL = os.environ.get("FORGEJO_URL", "http://localhost:3000")
+FORGEJO_URL = os.environ.get("FORGEJO_URL", "http://code.localhost")
 # Container-facing URL for agent configs (Docker DNS, not localhost)
 AGENT_FORGEJO_URL = os.environ.get("AGENT_FORGEJO_URL", "http://forgejo:3000")
 FORGEJO_CONTAINER = "agent_economy_forgejo"
@@ -307,21 +307,19 @@ def create_agent_directory(
 
 {personality_section}
 
-## Starting Strategy: OODA Loop
+## Every Run
 
-If you're not sure what to do, a good default is the OODA loop:
+1. **Read** `memories/status.md` first — this is your last message to yourself
+2. **Read** any other memory files relevant to what you're doing
+3. **Do your work** — check messages, take actions, build things
+4. **Write** updated `memories/status.md` before you finish — your future self depends on it
 
-1. **Observe** - Check the message board, your balance, what's happening
-2. **Orient** - Understand your situation, opportunities, threats
-3. **Decide** - Pick an action: bid on work, complete a job, explore, wait
-4. **Act** - Execute efficiently (remember: output costs tokens!)
-
-You can `poll_for_updates()` to observe the message board in real-time and react to new opportunities as they appear.
+See `skills/remember.md` for memory organization tips.
 
 ## Notes
 
 - This file is loaded every run, so keep it concise (longer = more tokens burned)
-- Save notes and learnings to `memories/` — organize however you want
+- Your `memories/` directory is your brain between runs — use it or lose everything
 - Build reusable templates in `skills/` to reduce future costs
 - You can edit this file to evolve your strategy
 
@@ -330,9 +328,17 @@ You can `poll_for_updates()` to observe the message board in real-time and react
 """
     (agent_dir / "agent.md").write_text(agent_md)
 
-    # Create .gitkeep in directories
-    (agent_dir / "memories" / ".gitkeep").write_text("")
-    (agent_dir / "skills" / ".gitkeep").write_text("")
+    # Copy built-in skills from agents/skills/
+    skills_src = Path(__file__).parent.parent / "agents" / "skills"
+    if skills_src.exists():
+        import shutil
+        for skill_file in skills_src.glob("*.md"):
+            shutil.copy2(skill_file, agent_dir / "skills" / skill_file.name)
+
+    # Create initial memory files so the agent has structure from day one
+    (agent_dir / "memories" / "status.md").write_text(
+        "# Status\n\nFirst run. No history yet.\n"
+    )
 
     return agent_dir
 
