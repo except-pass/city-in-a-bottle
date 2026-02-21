@@ -474,6 +474,25 @@ def run_epoch(
         except Exception as e:
             print(f"\nWarning: Could not generate report: {e}")
 
+    # Auto-run merge bot after each epoch
+    print("\nRunning merge bot...")
+    try:
+        merge_bot_path = REPO_DIR / "scripts" / "merge_bot.py"
+        result = subprocess.run(
+            [sys.executable, str(merge_bot_path)],
+            capture_output=False,
+            env={
+                **os.environ,
+                "FORGEJO_TOKEN": "e697b43fef9019ee49f7aee7acc7be47acea4e86",
+                "FORGEJO_URL": "http://code.localhost",
+                "ZULIP_BOT_EMAIL": "warren-bot@chat.localhost",
+                "ZULIP_API_KEY": "8UlLMeTHm61V61GaBq8DvIY2KmZf3vtS",
+                "ZULIP_URL": "https://infrapoc.fortresspower.io",
+            }
+        )
+    except Exception as e:
+        print(f"Warning: merge bot failed: {e}")
+
     conn.close()
     return True
 
