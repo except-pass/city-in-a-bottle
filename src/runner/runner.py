@@ -569,40 +569,52 @@ class AgentRunner:
                 )
 
             # ── Memory Trigger ────────────────────────────────────────────────
-            # After every run, inject a guaranteed status snapshot into
-            # memories/status.md so agents always wake up with fresh context,
-            # even if they ran out of turns before writing their own memories.
-            # Agent-written content is preserved above the snapshot header.
+            # Resume the session and force a real memory write while the agent's
+            # full context is still loaded. This produces synthesized memories,
+            # not a stat dump. Max 5 turns — just write the file and stop.
             final_balance = await ledger.get_balance(agent_id)
-            action_summary = {}
-            for a in ctx.actions:
-                tool = a.get("tool", a.get("type", "unknown"))
-                action_summary[tool] = action_summary.get(tool, 0) + 1
-            action_lines = "\n".join(
-                f"  - {tool}: {count}" for tool, count in sorted(action_summary.items())
-            )
-            snapshot = (
-                f"\n\n---\n"
-                f"<!-- RUNNER SNAPSHOT — auto-written at run end, do not remove -->\n"
-                f"**Last run:** Epoch {epoch_number} | {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC\n"
-                f"**Balance:** {final_balance:,} tokens "
-                f"(spent {ctx.tokens_out:,} this run)\n"
-                f"**Actions this run:**\n{action_lines if action_lines else '  (none)'}\n"
-                f"<!-- END RUNNER SNAPSHOT -->\n"
-            )
-            status_path = agent_dir / "memories" / "status.md"
-            status_path.parent.mkdir(parents=True, exist_ok=True)
-            existing = status_path.read_text() if status_path.exists() else ""
-            # Strip any previous snapshot so we don't accumulate them
-            if "<!-- RUNNER SNAPSHOT" in existing:
-                existing = existing[:existing.index("\n\n---\n<!-- RUNNER SNAPSHOT")]
-            status_path.write_text(existing.strip() + snapshot)
+            session_id = result_message.session_id if result_message else None
+
+            if session_id:
+                memory_prompt = (
+                    f"⚠️ MANDATORY MEMORY WRITE — do this before anything else.\n\n"
+                    f"Your run is ending. You have full context of everything you did this epoch. "
+                    f"Write your `memories/status.md` NOW so your future self isn't starting blind.\n\n"
+                    f"Include:\n"
+                    f"- **What you did** this epoch (actions taken, what worked, what failed)\n"
+                    f"- **What you learned** (about the codebase, other agents, opportunities)\n"
+                    f"- **Current balance:** {final_balance:,} tokens (spent {ctx.tokens_out:,} this run)\n"
+                    f"- **What to do next epoch** — concrete next steps, not vague intentions\n"
+                    f"- **Any plans or proposals** you were working on\n\n"
+                    f"Write the file. That's all. Nothing else."
+                )
+                memory_options = ClaudeCodeOptions(
+                    resume=session_id,
+                    max_turns=5,
+                    cwd=str(agent_dir),
+                    permission_mode="bypassPermissions",
+                    mcp_servers=mcp_servers,
+                )
+                try:
+                    async for msg in query(prompt=memory_prompt, options=memory_options):
+                        if isinstance(msg, AssistantMessage):
+                            for block in msg.content:
+                                if isinstance(block, ToolUseBlock):
+                                    ctx.actions.append({
+                                        "type": "memory_trigger",
+                                        "tool": block.name,
+                                    })
+                        elif isinstance(msg, ResultMessage):
+                            if msg.usage:
+                                ctx.tokens_out += msg.usage.get("output_tokens", 0)
+                except Exception as mem_err:
+                    print(f"  Warning: memory trigger failed for {agent_id}: {mem_err}")
             # ─────────────────────────────────────────────────────────────────
 
             # Record run
             await self._record_run(ctx, status="completed")
 
-            # final_balance already fetched above in memory trigger
+            # final_balance fetched above in memory trigger
 
             # Log agent end for replay visualizations
             if event_logger:
