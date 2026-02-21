@@ -24,6 +24,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -36,7 +37,7 @@ POSTGRES_DB = os.environ.get("POSTGRES_DB", "agent_economy")
 POSTGRES_USER = os.environ.get("POSTGRES_USER", "agent_economy")
 POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "agent_economy_dev")
 
-DEFAULT_FAUCET = int(os.environ.get("FAUCET_AMOUNT", "2000"))
+DEFAULT_FAUCET = int(os.environ.get("FAUCET_AMOUNT", "10000"))
 DEFAULT_MAX_TURNS = int(os.environ.get("MAX_TURNS", "25"))
 
 AGENTS_DIR = Path(__file__).parent.parent / ".data" / "agents"
@@ -135,10 +136,11 @@ def rebuild_from_main(dry_run: bool = False) -> bool:
             auth_url = f"http://operator:{token}@code.localhost/{FORGEJO_ORG}/{FORGEJO_REPO}.git"
             result = subprocess.run(
                 ["git", "pull", auth_url, "main"],
-                capture_output=True, text=True, cwd=REPO_DIR
+                capture_output=True, text=True, cwd=REPO_DIR,
+                timeout=30,  # Don't hang forever if Forgejo is slow
             )
             if result.returncode != 0:
-                print(f"  Git pull failed: {result.stderr}")
+                print(f"  Git pull failed (skipping): {result.stderr[:200]}")
                 # Don't abort - maybe nothing to pull yet
             else:
                 print(result.stdout if result.stdout else "  Already up to date")
@@ -211,9 +213,9 @@ def credit_faucet(conn, agent_id: str, amount: int, epoch: int) -> int:
     return new_balance
 
 
-def run_agent(agent_id: str, max_turns: int, epoch: int, dry_run: bool = False) -> dict:
+def run_agent(agent_id: str, max_turns: int, epoch: int, dry_run: bool = False, retries: int = 2) -> dict:
     """
-    Run an agent for up to max_turns.
+    Run an agent for up to max_turns. Retries on rate limit errors.
 
     Note: max_turns is read from config.json, not command line.
     The parameter here is just for display/logging.
@@ -229,22 +231,33 @@ def run_agent(agent_id: str, max_turns: int, epoch: int, dry_run: bool = False) 
     env = os.environ.copy()
     env["EPOCH_NUMBER"] = str(epoch)
 
-    # Run the agent using run-agent.sh
-    # max_turns comes from agent's config.json, not CLI
-    result = subprocess.run(
-        ["./run-agent.sh", agent_id],
-        capture_output=True, text=True,
-        cwd=REPO_DIR,
-        env=env,
-        timeout=1800,  # 30 min timeout per agent
-    )
+    for attempt in range(1, retries + 2):
+        # Run the agent using run-agent.sh
+        # max_turns comes from agent's config.json, not CLI
+        result = subprocess.run(
+            ["./run-agent.sh", agent_id],
+            capture_output=True, text=True,
+            cwd=REPO_DIR,
+            env=env,
+            timeout=1800,  # 30 min timeout per agent
+        )
 
-    if result.returncode == 0:
-        print(f"  {agent_id} completed successfully")
-        return {"status": "completed", "output": result.stdout[-1000:]}  # Last 1000 chars
-    else:
-        print(f"  {agent_id} failed: {result.stderr[-500:]}")
-        return {"status": "failed", "error": result.stderr[-500:]}
+        if result.returncode == 0:
+            print(f"  {agent_id} completed successfully")
+            return {"status": "completed", "output": result.stdout[-1000:]}
+
+        # Check for rate limit in stderr — retry with backoff
+        stderr = result.stderr[-1000:]
+        if "rate_limit" in stderr.lower() and attempt <= retries:
+            wait = 60 * attempt
+            print(f"  {agent_id} hit rate limit (attempt {attempt}/{retries+1}), waiting {wait}s...")
+            time.sleep(wait)
+            continue
+
+        print(f"  {agent_id} failed: {stderr[-500:]}")
+        return {"status": "failed", "error": stderr[-500:]}
+
+    return {"status": "failed", "error": "Max retries exceeded (rate limit)"}
 
 
 def run_merge_bot(dry_run: bool = False) -> int:
@@ -419,6 +432,11 @@ def run_epoch(
 
             if result["status"] == "completed":
                 agents_completed += 1
+
+        # Brief pause between agents to avoid API rate limits
+        if agent_id != agents[-1] and not dry_run:
+            print(f"  Waiting 30s before next agent...")
+            time.sleep(30)
 
     # Finalize epoch
     if not dry_run:

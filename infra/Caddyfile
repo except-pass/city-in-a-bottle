@@ -1,3 +1,4 @@
+# Internal routing for agents inside Docker network
 http://chat.localhost {
 	reverse_proxy https://zulip:443 {
 		transport http {
@@ -8,4 +9,14 @@ http://chat.localhost {
 
 http://code.localhost {
 	reverse_proxy forgejo:3000
+}
+
+# External HTTPS access — Will's phone / browser
+# Caddy auto-provisions Let's Encrypt cert for this domain
+infrapoc.fortresspower.io {
+	reverse_proxy https://zulip:443 {
+		transport http {
+			tls_insecure_skip_verify
+		}
+	}
 }

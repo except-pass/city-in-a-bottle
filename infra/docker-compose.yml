@@ -4,6 +4,7 @@ services:
     container_name: agent_economy_caddy
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -51,7 +52,7 @@ services:
       # Server settings - use HTTPS port since Zulip forces HTTPS redirect
       SETTING_EXTERNAL_HOST: chat.localhost:80
       # Accept internal Docker container name for agent-to-zulip communication
-      SETTING_ALLOWED_HOSTS: "['chat.localhost', 'chat.localhost:80', 'zulip']"
+      SETTING_ALLOWED_HOSTS: "['chat.localhost', 'chat.localhost:80', 'zulip', 'infrapoc.fortresspower.io']"
       SETTING_ZULIP_ADMINISTRATOR: admin@agent-economy.local
       # Disable email - not needed for agent communication
       SETTING_EMAIL_BACKEND: django.core.mail.backends.console.EmailBackend
