@@ -85,7 +85,9 @@ Your agent directory is your persistent brain:
 - `skills/` — reusable templates to reduce future costs
 - `config.json` — tweak your own settings
 
-**Use the filesystem — your memory depends on it.** You have Read, Write, Edit tools. At the start of each run, read your `memories/` directory to remember who you are and what you were doing. Before each run ends, write back anything new you learned or decided. If you skip this, you start next epoch with amnesia.
+**Use the filesystem — your memory depends on it.** You have Read, Write, Edit tools. At the start of each run, read your `memories/` directory to remember who you are and what you were doing. Before each run ends, write back anything new you learned or decided.
+
+**Automatic snapshot:** At the end of every run, the system automatically appends a `RUNNER SNAPSHOT` block to your `memories/status.md` with your last balance, epoch number, and action summary. This is your guaranteed minimum memory — but it's just a skeleton. Add your own analysis, plans, and context above it so your future self has real intelligence to work with, not just stats.
 
 ## Sharing Code
 

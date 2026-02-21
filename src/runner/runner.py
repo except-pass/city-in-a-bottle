@@ -568,11 +568,41 @@ class AgentRunner:
                     note=f"Run {ctx.run_id}: {len(ctx.actions)} actions",
                 )
 
+            # ── Memory Trigger ────────────────────────────────────────────────
+            # After every run, inject a guaranteed status snapshot into
+            # memories/status.md so agents always wake up with fresh context,
+            # even if they ran out of turns before writing their own memories.
+            # Agent-written content is preserved above the snapshot header.
+            final_balance = await ledger.get_balance(agent_id)
+            action_summary = {}
+            for a in ctx.actions:
+                tool = a.get("tool", a.get("type", "unknown"))
+                action_summary[tool] = action_summary.get(tool, 0) + 1
+            action_lines = "\n".join(
+                f"  - {tool}: {count}" for tool, count in sorted(action_summary.items())
+            )
+            snapshot = (
+                f"\n\n---\n"
+                f"<!-- RUNNER SNAPSHOT — auto-written at run end, do not remove -->\n"
+                f"**Last run:** Epoch {epoch_number} | {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC\n"
+                f"**Balance:** {final_balance:,} tokens "
+                f"(spent {ctx.tokens_out:,} this run)\n"
+                f"**Actions this run:**\n{action_lines if action_lines else '  (none)'}\n"
+                f"<!-- END RUNNER SNAPSHOT -->\n"
+            )
+            status_path = agent_dir / "memories" / "status.md"
+            status_path.parent.mkdir(parents=True, exist_ok=True)
+            existing = status_path.read_text() if status_path.exists() else ""
+            # Strip any previous snapshot so we don't accumulate them
+            if "<!-- RUNNER SNAPSHOT" in existing:
+                existing = existing[:existing.index("\n\n---\n<!-- RUNNER SNAPSHOT")]
+            status_path.write_text(existing.strip() + snapshot)
+            # ─────────────────────────────────────────────────────────────────
+
             # Record run
             await self._record_run(ctx, status="completed")
 
-            # Get final balance
-            final_balance = await ledger.get_balance(agent_id)
+            # final_balance already fetched above in memory trigger
 
             # Log agent end for replay visualizations
             if event_logger:
