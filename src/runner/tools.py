@@ -325,23 +325,35 @@ class AgentTools:
 
     async def web_search(self, query: str, limit: int = 5) -> ToolResult:
         """
-        Search the web.
+        Search the web using DuckDuckGo.
 
         Args:
             query: Search query
-            limit: Maximum number of results
+            limit: Maximum number of results (default 5)
 
         Returns:
-            Search results or error
-
-        Note: This is a placeholder. In production, integrate with a search API.
+            List of results with title, url, and snippet
         """
-        # Placeholder - would integrate with DuckDuckGo, Brave, or similar
-        return ToolResult(
-            success=False,
-            result=None,
-            error="Web search not implemented. Please implement with your preferred search API.",
-        )
+        self._record_action("web_search", query=query)
+        try:
+            from duckduckgo_search import DDGS
+            results = []
+            with DDGS() as ddgs:
+                for r in ddgs.text(query, max_results=limit):
+                    results.append({
+                        "title": r.get("title", ""),
+                        "url": r.get("href", ""),
+                        "snippet": r.get("body", ""),
+                    })
+            if not results:
+                return ToolResult(success=True, result="No results found.", error=None)
+            formatted = "\n\n".join(
+                f"**{r['title']}**\n{r['url']}\n{r['snippet']}"
+                for r in results
+            )
+            return ToolResult(success=True, result=formatted, error=None)
+        except Exception as e:
+            return ToolResult(success=False, result=None, error=f"Web search failed: {e}")
 
 
 def get_tool_definitions() -> list[dict]:
