@@ -271,17 +271,12 @@ def process_repo(
             })
             continue
 
-        # Forgejo branch protection blocks merges via API even for admins when
-        # required_approvals > 0. Workaround: temporarily drop to 0, merge, restore.
-        bp_path = f"/repos/{owner}/{repo}/branch_protections/main"
-        forgejo_patch(client, bp_path, {"required_approvals": 0})
-        import time; time.sleep(1)
-
+        # Merge the PR — operator token has push whitelist access.
+        # Approval enforcement is handled by merge_bot itself (above).
+        # Forgejo branch protection no longer sets required_approvals.
         merge_status, merge_resp = forgejo_post(
             client, f"/repos/{owner}/{repo}/pulls/{number}/merge", {"Do": "merge"}
         )
-
-        forgejo_patch(client, bp_path, {"required_approvals": REQUIRED_APPROVALS})
 
         if merge_status in (200, 204):
             msg = f"PR #{number} '{title}' by {author} has been auto-merged to main."
