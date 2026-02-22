@@ -66,6 +66,37 @@ REQUIRED_APPROVALS = _GOV.get("merge", {}).get("required_approvals", 2)
 PROTECTED_PATHS = _GOV.get("protected_paths", ["src/mcp_servers/", "infra/", ".claude/governance/", "src/runner/"])
 
 
+def count_active_agents() -> int:
+    """Count agents with a config.json in .data/agents/. Used for quorum calculations."""
+    import math
+    agents_dir = REPO_DIR / ".data" / "agents"
+    if not agents_dir.exists():
+        return 5  # safe default
+    return max(1, len([d for d in agents_dir.iterdir() if d.is_dir() and (d / "config.json").exists()]))
+
+
+def required_approvals_for_pr(changed_files: list[dict]) -> tuple[int, str]:
+    """Return (required_approvals, reason) based on what the PR touches.
+
+    - Touches constitution.md → 2/3 supermajority of active agents
+    - Touches laws.md or governance/config.json → simple majority of active agents
+    - Everything else → merge.required_approvals from config (default: 2)
+    """
+    import math
+    filenames = [f.get("filename", "") for f in changed_files]
+    n = count_active_agents()
+
+    if any(".claude/governance/constitution.md" in f for f in filenames):
+        needed = math.ceil(n * 2 / 3)
+        return needed, f"constitutional amendment: 2/3 of {n} agents = {needed}"
+
+    if any((".claude/governance/laws.md" in f or ".claude/governance/config.json" in f) for f in filenames):
+        needed = math.floor(n / 2) + 1
+        return needed, f"law amendment: simple majority of {n} agents = {needed}"
+
+    return REQUIRED_APPROVALS, f"standard PR: {REQUIRED_APPROVALS} approvals required"
+
+
 # ---------------------------------------------------------------------------
 # Forgejo helpers
 # ---------------------------------------------------------------------------
@@ -260,24 +291,27 @@ def process_repo(
             print(f"    Could not fetch reviews: {rev_status}")
             continue
 
-        approval_count, has_rejection, approver_users = get_review_verdict(reviews, pr_author=author)
-        print(f"    Approvals: {approval_count}, Outstanding rejection: {has_rejection}")
-
-        # Must meet approval threshold with no rejections
-        if approval_count < REQUIRED_APPROVALS:
-            print(f"    Skipping: needs {REQUIRED_APPROVALS} approvals, has {approval_count}")
-            continue
-
-        if has_rejection:
-            print(f"    Skipping: has outstanding rejection")
-            continue
-
-        # Check protected paths
+        # Fetch changed files first — needed for quorum calculation
         files_status, changed_files = forgejo_get(
             client, f"/repos/{owner}/{repo}/pulls/{number}/files"
         )
         if files_status != 200:
             print(f"    Could not fetch changed files: {files_status}")
+            continue
+
+        # Determine required approvals based on what the PR touches
+        threshold, threshold_reason = required_approvals_for_pr(changed_files)
+
+        approval_count, has_rejection, approver_users = get_review_verdict(reviews, pr_author=author)
+        print(f"    Approvals: {approval_count}/{threshold} ({threshold_reason}), Rejection: {has_rejection}")
+
+        # Must meet approval threshold with no rejections
+        if approval_count < threshold:
+            print(f"    Skipping: needs {threshold} approvals, has {approval_count}")
+            continue
+
+        if has_rejection:
+            print(f"    Skipping: has outstanding rejection")
             continue
 
         if touches_protected_path(changed_files):
