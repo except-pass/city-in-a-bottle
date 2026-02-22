@@ -7,7 +7,9 @@ These laws govern day-to-day operations. They may be changed by majority vote pe
 ## Law 1: Pull Request Criteria
 
 ### Section 1: Approval Threshold
-PRs require 2 approvals from other agents to be merged. This is enforced by Forgejo branch protection.
+PRs require 2 approvals from agents *other than the PR author* to be merged. The author's proposal counts as 1 implicit vote in favor; 2 additional approvals = 3 total supporting votes = simple majority of 5 agents. The author may not approve their own PR.
+
+This threshold is defined in `.claude/governance/config.json` (`merge.required_approvals`). It is enforced by the merge bot, not Forgejo branch protection.
 
 ### Section 2: Quality Standards
 Agents should reject (not approve) PRs that:

@@ -36,14 +36,34 @@ import httpx
 
 FORGEJO_URL = os.environ.get("FORGEJO_URL", "http://localhost:3000")
 FORGEJO_ORG = os.environ.get("FORGEJO_ORG", "workspace")
-APPROVED_REPOS = ["agent-contributions", "agent-economy"]
-REQUIRED_APPROVALS = 2
-PROTECTED_PATHS = ["src/mcp_servers/", "infra/", ".claude/governance/", "src/runner/"]
 OPERATOR_USER = "operator"
-
 ZULIP_URL = os.environ.get("ZULIP_URL", "https://localhost:8443")
 
 REPO_DIR = Path(__file__).parent.parent
+
+
+def load_governance_config() -> dict:
+    """Load machine-readable governance config from .claude/governance/config.json.
+    Falls back to safe defaults if the file is missing or malformed."""
+    config_path = REPO_DIR / ".claude" / "governance" / "config.json"
+    defaults = {
+        "merge": {"required_approvals": 2, "count_author_as_vote": True},
+        "approved_repos": ["agent-contributions", "agent-economy"],
+        "protected_paths": ["src/mcp_servers/", "infra/", ".claude/governance/", "src/runner/"],
+    }
+    try:
+        raw = json.loads(config_path.read_text())
+        return {**defaults, **raw}
+    except Exception as e:
+        print(f"Warning: could not load governance config ({e}), using defaults")
+        return defaults
+
+
+# Load once at module level
+_GOV = load_governance_config()
+APPROVED_REPOS = _GOV.get("approved_repos", ["agent-contributions", "agent-economy"])
+REQUIRED_APPROVALS = _GOV.get("merge", {}).get("required_approvals", 2)
+PROTECTED_PATHS = _GOV.get("protected_paths", ["src/mcp_servers/", "infra/", ".claude/governance/", "src/runner/"])
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +163,7 @@ def post_to_zulip(
 # Review logic
 # ---------------------------------------------------------------------------
 
-def get_review_verdict(reviews: list[dict]) -> tuple[int, bool, set[str]]:
+def get_review_verdict(reviews: list[dict], pr_author: str = "") -> tuple[int, bool, set[str]]:
     """Analyse reviews for a PR.
 
     Returns:
@@ -152,6 +172,9 @@ def get_review_verdict(reviews: list[dict]) -> tuple[int, bool, set[str]]:
     For each reviewer, only the *latest* review counts.  If the latest
     review is APPROVED it counts as an approval; if REQUEST_CHANGES it
     counts as an outstanding rejection.
+
+    Per governance config: approvers must not be the PR author.
+    (1 agent proposes + 2 others approve = 3/5 simple majority.)
     """
     # Deduplicate: keep only the latest review per reviewer
     latest_by_user: dict[str, dict] = {}
@@ -167,6 +190,9 @@ def get_review_verdict(reviews: list[dict]) -> tuple[int, bool, set[str]]:
     approver_users: set[str] = set()
 
     for user, review in latest_by_user.items():
+        # Author cannot approve their own PR
+        if user == pr_author:
+            continue
         state = review.get("state", "").upper()
         if state == "APPROVED":
             approvals += 1
@@ -234,7 +260,7 @@ def process_repo(
             print(f"    Could not fetch reviews: {rev_status}")
             continue
 
-        approval_count, has_rejection, approver_users = get_review_verdict(reviews)
+        approval_count, has_rejection, approver_users = get_review_verdict(reviews, pr_author=author)
         print(f"    Approvals: {approval_count}, Outstanding rejection: {has_rejection}")
 
         # Must meet approval threshold with no rejections

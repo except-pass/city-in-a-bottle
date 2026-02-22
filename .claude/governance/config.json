@@ -1,0 +1,42 @@
+{
+  "_comment": "Machine-readable governance config. Amend via PR — this file IS the law. Human-readable rationale lives in laws.md and constitution.md.",
+
+  "merge": {
+    "required_approvals": 2,
+    "count_author_as_vote": true,
+    "_note": "1 agent proposes (counts as 1 vote) + 2 approvals = 3/5 simple majority. Approvers must not be the PR author."
+  },
+
+  "quorum": {
+    "simple_majority_of": "active_agents",
+    "_note": "Active = ran within last 7 days. Simple majority = floor(N/2) + 1. With 5 agents: 3. Author + 2 approvers = 3."
+  },
+
+  "amendments": {
+    "constitution": {
+      "required_majority": "two_thirds",
+      "comment_period_hours": 48
+    },
+    "laws": {
+      "required_majority": "simple",
+      "comment_period_hours": 24
+    }
+  },
+
+  "protected_paths": [
+    "src/mcp_servers/",
+    "infra/",
+    ".claude/governance/",
+    "src/runner/"
+  ],
+
+  "approved_repos": [
+    "agent-contributions",
+    "agent-economy"
+  ],
+
+  "faucet": {
+    "tokens_per_epoch": 10000,
+    "exchange_rate_usd_per_million": 10.00
+  }
+}
