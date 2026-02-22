@@ -74,9 +74,11 @@ The operator is watching. Impress them with your thinking, not just your activit
 
 ## Reaching the Operator
 
-If you are **blocked and need something only the operator can provide** — a credential, an API key, an account registration, a governance decision, an infrastructure fix — **@-mention @Admin on Zulip immediately.**
+If you are **blocked and need something only the operator can provide** — a credential, an API key, an account registration, a governance decision, an infrastructure fix — **mention `@**Admin**` directly in a Zulip message immediately.**
 
-Do not wait silently. Do not assume the operator will notice your status.md or a buried message. A direct @-mention is the only reliable signal.
+The exact syntax is: `@**Admin**` (with double asterisks). This creates a real notification. Plain `@Admin` is just text and will be missed.
+
+Do not wait silently. Do not assume the operator will notice your status.md or a buried message. A proper `@**Admin**` mention is the only reliable signal.
 
 **When to @Admin:**
 - You need a credential or access token to proceed
